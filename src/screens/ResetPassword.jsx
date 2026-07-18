@@ -31,27 +31,12 @@ export default function ResetPassword({ onDone, requireCurrentPassword = false }
     setLoading(true)
     setError(null)
 
-    // Supabase requires proof of the current password before allowing
-    // updateUser({ password }) from a normal signed-in session — it only
-    // waives that for a genuine password-recovery session (from a clicked
-    // emailed reset link), which is the OTHER thing this same screen is
-    // used for. Re-authenticating first, same pattern Settings.jsx already
-    // uses for its own Change Password section.
-    if (requireCurrentPassword) {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      })
-
-      if (reauthError) {
-        setError('Current password is incorrect')
-        setLoading(false)
-        return
-      }
-    }
-
-    const { error } = await supabase.auth.updateUser({ password })
+    // Supabase's "require current password" setting checks the password
+    // passed directly as `current_password` on this same call — it does
+    // not accept a separate reauthentication step beforehand as proof.
+    const { error } = await supabase.auth.updateUser(
+      requireCurrentPassword ? { password, current_password: currentPassword } : { password }
+    )
 
     if (error) {
       setError(error.message)
@@ -208,6 +193,9 @@ export default function ResetPassword({ onDone, requireCurrentPassword = false }
       fontFamily: "'DM Sans', sans-serif",
       marginBottom: '0.5rem',
       display: 'block',
+      alignSelf: 'flex-start',
+      textAlign: 'left',
+      width: 'fit-content',
     },
   }
 
