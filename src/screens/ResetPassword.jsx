@@ -4,8 +4,10 @@ import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from "../components/PeekPasswordInput"
 import { validatePassword } from '../utils/helpers'
 
-export default function ResetPassword({ onDone }) {
+export default function ResetPassword({ onDone, requireCurrentPassword = false }) {
   const { theme } = useTheme()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -15,6 +17,7 @@ export default function ResetPassword({ onDone }) {
   const [focusedField, setFocusedField] = useState(null)
 
   const validate = () => {
+    if (requireCurrentPassword && !currentPassword) return 'Please enter your current (temporary) password'
     if (!password) return 'Please enter a new password'
     const passwordError = validatePassword(password)
     if (passwordError) return passwordError
@@ -27,6 +30,26 @@ export default function ResetPassword({ onDone }) {
     if (err) { setError(err); return }
     setLoading(true)
     setError(null)
+
+    // Supabase requires proof of the current password before allowing
+    // updateUser({ password }) from a normal signed-in session — it only
+    // waives that for a genuine password-recovery session (from a clicked
+    // emailed reset link), which is the OTHER thing this same screen is
+    // used for. Re-authenticating first, same pattern Settings.jsx already
+    // uses for its own Change Password section.
+    if (requireCurrentPassword) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      })
+
+      if (reauthError) {
+        setError('Current password is incorrect')
+        setLoading(false)
+        return
+      }
+    }
 
     const { error } = await supabase.auth.updateUser({ password })
 
@@ -174,6 +197,18 @@ export default function ResetPassword({ onDone }) {
       display: 'inline-block',
       animation: 'spin 0.7s linear infinite',
     },
+    signOutLink: {
+      background: 'none',
+      border: 'none',
+      color: theme.primary,
+      fontSize: '0.875rem',
+      fontWeight: '600',
+      cursor: 'pointer',
+      padding: 0,
+      fontFamily: "'DM Sans', sans-serif",
+      marginBottom: '0.5rem',
+      display: 'block',
+    },
   }
 
   const inputStyle = (field) => ({
@@ -205,12 +240,52 @@ export default function ResetPassword({ onDone }) {
       <style>{`input::placeholder { color: ${theme.textMuted}; } input:focus { outline: none; }`}</style>
 
       <div style={styles.card}>
+        <button
+          type="button"
+          style={styles.signOutLink}
+          onClick={() => supabase.auth.signOut()}
+        >
+          ← Back
+        </button>
+
         <div>
           <h2 style={styles.title}>Reset Password</h2>
           <p style={styles.subtitle}>Choose a strong new password for your account.</p>
         </div>
 
         <div style={styles.form}>
+          {requireCurrentPassword && (
+            <div style={styles.fieldGroup}>
+              <label style={styles.label}>Current (temporary) password</label>
+              <div style={styles.fieldWrap}>
+                <PeekPasswordInput
+                  style={inputStyle('currentPassword')}
+                  placeholder="The password you were given"
+                  value={currentPassword}
+                  showPassword={showCurrentPassword}
+                  onChange={e => { setCurrentPassword(e.target.value); setError(null) }}
+                  onFocus={() => setFocusedField('currentPassword')}
+                  onBlur={() => setFocusedField(null)}
+                  onKeyDown={e => e.key === 'Enter' && handleReset()}
+                />
+                <button type="button" style={styles.eyeBtn} onClick={() => setShowCurrentPassword(p => !p)} tabIndex={-1} aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
+                  {showCurrentPassword ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={styles.fieldGroup}>
             <label style={styles.label}>New password</label>
             <div style={styles.fieldWrap}>

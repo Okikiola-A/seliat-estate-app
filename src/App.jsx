@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import { useTheme } from './context/useTheme'
 import { useIdleSignOut } from './hooks/useIdleSignOut'
+import { useSessionExpiry, clearSessionExpiry } from './hooks/useSessionExpiry'
 import Login from './screens/Login'
 import GuardScreen from './screens/GuardScreen'
 import ResidentScreen from './screens/ResidentScreen'
@@ -16,8 +17,10 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [isResetting, setIsResetting] = useState(false)
   const [accountStatus, setAccountStatus] = useState(null)
+  const [loginNonce, setLoginNonce] = useState(0)
 
   useIdleSignOut(!!session && !!userProfile)
+  useSessionExpiry(userProfile?.role, loginNonce)
 
   // Mirrors `session` state so the auth listener below (set up once on
   // mount, so its closure would otherwise be stuck seeing session as it
@@ -88,8 +91,10 @@ export default function App() {
       setSession(newSession)
       if (newSession) {
         setLoading(true)
+        setLoginNonce(n => n + 1)
         fetchProfile(newSession.user.id)
       } else {
+        clearSessionExpiry()
         setUserProfile(null)
         setAccountStatus(null)
         setLoading(false)
@@ -142,13 +147,13 @@ export default function App() {
     )
   }
 
-  if (userProfile.role === 'guard') return <GuardScreen profile={userProfile} />
-  if (userProfile.role === 'resident') return <ResidentScreen profile={userProfile} />
-  if (userProfile.force_password_change) return <ResetPassword onDone={() => {
+  if (userProfile.force_password_change) return <ResetPassword requireCurrentPassword onDone={() => {
     setUserProfile(prev => ({ ...prev, force_password_change: false }))
     supabase.from('users').update({ force_password_change: false }).eq('id', userProfile.id)
     supabase.auth.signOut()
   }} />
+  if (userProfile.role === 'guard') return <GuardScreen profile={userProfile} />
+  if (userProfile.role === 'resident') return <ResidentScreen profile={userProfile} />
   if (userProfile.role === 'admin') return <AdminDashboard profile={userProfile} />
 
   // Admin and supervisor placeholder for now
