@@ -50,7 +50,6 @@ export const validatePassword = (password) => {
   if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter'
   if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter'
   if (!/[0-9]/.test(password)) return 'Password must contain at least one number'
-  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must contain at least one symbol'
   return null
 }
 
