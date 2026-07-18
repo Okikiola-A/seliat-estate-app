@@ -147,10 +147,9 @@ export default function App() {
     )
   }
 
-  if (userProfile.force_password_change) return <ResetPassword requireCurrentPassword onDone={() => {
-    setUserProfile(prev => ({ ...prev, force_password_change: false }))
-    supabase.from('users').update({ force_password_change: false }).eq('id', userProfile.id)
-    supabase.auth.signOut()
+  if (userProfile.force_password_change) return <ResetPassword requireCurrentPassword onDone={async () => {
+    await supabase.from('users').update({ force_password_change: false }).eq('id', userProfile.id)
+    await supabase.auth.signOut()
   }} />
   if (userProfile.role === 'guard') return <GuardScreen profile={userProfile} />
   if (userProfile.role === 'resident') return <ResidentScreen profile={userProfile} />
