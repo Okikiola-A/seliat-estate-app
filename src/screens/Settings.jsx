@@ -29,7 +29,7 @@ const getSupportMailto = (profile) => {
   return `mailto:${SUPPORT_EMAIL}?${params.toString()}`
 }
 
-export default function Settings({ profile, onBack }) {
+export default function Settings({ profile, onBack, onPasswordChanged }) {
   const { theme, isDark, toggleTheme } = useTheme()
   const isResident = profile.role === 'resident'
 
@@ -107,24 +107,25 @@ export default function Settings({ profile, onBack }) {
 
     setPasswordSaving(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: currentPassword,
+    // Supabase's "require current password" project setting checks the
+    // password passed directly as `current_password` on this same call —
+    // a separate signInWithPassword reauth beforehand does NOT satisfy it.
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      current_password: currentPassword,
     })
-
-    if (reauthError) {
-      setPasswordError('Current password is incorrect')
-      setPasswordSaving(false)
-      return
-    }
-
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
 
     if (error) {
       setPasswordError(error.message)
       setPasswordSaving(false)
       return
+    }
+
+    // Clears any pending "temporary password" reminder — this is now the
+    // only place a temp/forced password change can actually be completed.
+    if (profile.force_password_change) {
+      await supabase.from('users').update({ force_password_change: false }).eq('id', profile.id)
+      onPasswordChanged?.()
     }
 
     setPasswordSaving(false)

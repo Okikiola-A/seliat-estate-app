@@ -14,7 +14,7 @@ import Settings from './Settings'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
-export default function AdminDashboard({ profile }) {
+export default function AdminDashboard({ profile, openSettingsSignal, onPasswordChanged }) {
   const { theme } = useTheme()
   const [activeTab, setActiveTab] = useState('overview')
   const [pendingUsers, setPendingUsers] = useState([])
@@ -28,6 +28,11 @@ export default function AdminDashboard({ profile }) {
   const [roleFilter, setRoleFilter] = useState('all')
   const [sortBy, setSortBy] = useState('joined')
   const [confirmModal, setConfirmModal] = useState(null)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (openSettingsSignal) setShowSettings(true)
+  }, [openSettingsSignal])
   const [page, setPage] = useState(1)
   const [selectedResident, setSelectedResident] = useState(null)
   const [residentCodes, setResidentCodes] = useState([])
@@ -592,7 +597,7 @@ export default function AdminDashboard({ profile }) {
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} />
+    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
   }
 
   if (selectedResident) {

@@ -1,17 +1,22 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { capitalizeName } from '../utils/helpers'
 import AvatarMenu from '../components/AvatarMenu'
 import Settings from './Settings'
 
-export default function GuardScreen({ profile }) {
+export default function GuardScreen({ profile, openSettingsSignal, onPasswordChanged }) {
   const { theme } = useTheme()
   const [code, setCode] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const inputRef = useRef(null)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (openSettingsSignal) setShowSettings(true)
+  }, [openSettingsSignal])
 
   const handleChange = (e) => {
     const val = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6)
@@ -87,7 +92,7 @@ export default function GuardScreen({ profile }) {
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} />
+    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
   }
 
   const styles = {

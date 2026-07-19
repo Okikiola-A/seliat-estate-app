@@ -11,7 +11,7 @@ import Settings from './Settings'
 
 import { generateCode, formatDate, getCodeStatus, capitalizeName } from '../utils/helpers'
 
-export default function ResidentScreen({ profile }) {
+export default function ResidentScreen({ profile, openSettingsSignal, onPasswordChanged }) {
   const { theme } = useTheme()
   const [activeCode, setActiveCode] = useState(null)
   const [history, setHistory] = useState([])
@@ -22,6 +22,11 @@ export default function ResidentScreen({ profile }) {
   const [showSettings, setShowSettings] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (openSettingsSignal) setShowSettings(true)
+  }, [openSettingsSignal])
   const [revoking, setRevoking] = useState(false)
 
   const fetchCodes = async () => {
@@ -136,7 +141,7 @@ export default function ResidentScreen({ profile }) {
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} />
+    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
   }
 
   const styles = {
