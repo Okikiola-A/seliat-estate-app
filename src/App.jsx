@@ -210,4 +210,4 @@ const styles = {
     fontWeight: '600',
     cursor: 'pointer',
   },
-} 
+}
