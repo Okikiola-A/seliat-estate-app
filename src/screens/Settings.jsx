@@ -29,7 +29,7 @@ const getSupportMailto = (profile) => {
   return `mailto:${SUPPORT_EMAIL}?${params.toString()}`
 }
 
-export default function Settings({ profile, onBack, onPasswordChanged }) {
+export default function Settings({ profile, onBack, onPasswordChanged, focusPasswordSection = false }) {
   const { theme, isDark, toggleTheme } = useTheme()
   const isResident = profile.role === 'resident'
 
@@ -463,7 +463,7 @@ export default function Settings({ profile, onBack, onPasswordChanged }) {
           </button>
         </CollapsibleSection>
 
-        <CollapsibleSection title="Change Password" subtitle="Update your account password">
+        <CollapsibleSection title="Change Password" subtitle="Update your account password" defaultOpen={focusPasswordSection}>
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Current password</label>
             <div style={styles.fieldWrap}>

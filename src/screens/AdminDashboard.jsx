@@ -10,11 +10,12 @@ import { paginate } from '../utils/pagination'
 import Badge from '../components/Badge'
 import AvatarMenu from '../components/AvatarMenu'
 import NotificationBell from '../components/NotificationBell'
+import PasswordReminderBanner from '../components/PasswordReminderBanner'
 import Settings from './Settings'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
-export default function AdminDashboard({ profile, openSettingsSignal, onPasswordChanged }) {
+export default function AdminDashboard({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
   const [activeTab, setActiveTab] = useState('overview')
   const [pendingUsers, setPendingUsers] = useState([])
@@ -24,14 +25,18 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [sortBy, setSortBy] = useState('joined')
   const [confirmModal, setConfirmModal] = useState(null)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (openSettingsSignal) setShowSettings(true)
+    if (openSettingsSignal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowSettings(true)
+      setFocusPasswordSection(true)
+    }
   }, [openSettingsSignal])
   const [page, setPage] = useState(1)
   const [selectedResident, setSelectedResident] = useState(null)
@@ -597,7 +602,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
+    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
   }
 
   if (selectedResident) {
@@ -609,6 +614,10 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
           <p style={styles.headerTitleCenter} title={capitalizeName(selectedResident.full_name)}>{capitalizeName(selectedResident.full_name)}</p>
           <div style={{ width: '60px' }} />
         </div>
+
+        {showPasswordReminder && (
+          <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+        )}
 
         <div style={styles.body}>
           {residentCodes.length === 0 ? (
@@ -720,6 +729,10 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
           />
         </div>
       </div>
+
+      {showPasswordReminder && (
+        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+      )}
 
       <div style={styles.body}>
         {loading ? (

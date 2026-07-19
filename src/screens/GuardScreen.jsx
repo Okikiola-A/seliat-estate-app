@@ -3,19 +3,24 @@ import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { capitalizeName } from '../utils/helpers'
 import AvatarMenu from '../components/AvatarMenu'
+import PasswordReminderBanner from '../components/PasswordReminderBanner'
 import Settings from './Settings'
 
-export default function GuardScreen({ profile, openSettingsSignal, onPasswordChanged }) {
+export default function GuardScreen({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
   const [code, setCode] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (openSettingsSignal) setShowSettings(true)
+    if (openSettingsSignal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowSettings(true)
+      setFocusPasswordSection(true)
+    }
   }, [openSettingsSignal])
 
   const handleChange = (e) => {
@@ -92,7 +97,7 @@ export default function GuardScreen({ profile, openSettingsSignal, onPasswordCha
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
+    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
   }
 
   const styles = {
@@ -280,6 +285,10 @@ export default function GuardScreen({ profile, openSettingsSignal, onPasswordCha
           onSettingsClick={() => setShowSettings(true)}
         />
       </div>
+
+      {showPasswordReminder && (
+        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+      )}
 
       <div style={styles.body}>
         {!result ? (

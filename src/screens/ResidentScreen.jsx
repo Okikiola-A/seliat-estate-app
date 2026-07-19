@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import NotificationBell from '../components/NotificationBell'
 import AvatarMenu from '../components/AvatarMenu'
+import PasswordReminderBanner from '../components/PasswordReminderBanner'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
@@ -11,7 +12,7 @@ import Settings from './Settings'
 
 import { generateCode, formatDate, getCodeStatus, capitalizeName } from '../utils/helpers'
 
-export default function ResidentScreen({ profile, openSettingsSignal, onPasswordChanged }) {
+export default function ResidentScreen({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
   const [activeCode, setActiveCode] = useState(null)
   const [history, setHistory] = useState([])
@@ -20,12 +21,16 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (openSettingsSignal) setShowSettings(true)
+    if (openSettingsSignal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowSettings(true)
+      setFocusPasswordSection(true)
+    }
   }, [openSettingsSignal])
   const [revoking, setRevoking] = useState(false)
 
@@ -141,7 +146,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
   }
 
   if (showSettings) {
-    return <Settings profile={profile} onBack={() => setShowSettings(false)} onPasswordChanged={onPasswordChanged} />
+    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
   }
 
   const styles = {
@@ -445,6 +450,10 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
           />
         </div>
       </div>
+
+      {showPasswordReminder && (
+        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+      )}
 
       <div style={styles.body}>
 

@@ -9,7 +9,6 @@ import ResidentScreen from './screens/ResidentScreen'
 import AdminDashboard from './screens/AdminDashboard'
 import ResetPassword from './screens/ResetPassword'
 import AccountStatus from './screens/AccountStatus'
-import PasswordReminderBanner from './components/PasswordReminderBanner'
 
 export default function App() {
   const { applyUserTheme } = useTheme()
@@ -101,6 +100,8 @@ export default function App() {
         setUserProfile(null)
         setAccountStatus(null)
         setLoading(false)
+        setSettingsJumpSignal(0)
+        setPasswordReminderSnoozed(false)
       }
     })
 
@@ -156,36 +157,28 @@ export default function App() {
     setUserProfile(prev => ({ ...prev, force_password_change: false }))
   }
 
-  let content
+  const showPasswordReminder = userProfile.force_password_change && !passwordReminderSnoozed
+  const onSnoozeReminder = () => setPasswordReminderSnoozed(true)
+
   if (userProfile.role === 'guard') {
-    content = <GuardScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} />
-  } else if (userProfile.role === 'resident') {
-    content = <ResidentScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} />
-  } else if (userProfile.role === 'admin') {
-    content = <AdminDashboard profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} />
-  } else {
-    // Admin and supervisor placeholder for now
-    content = (
-      <div style={styles.center}>
-        <h1>Welcome, {userProfile.full_name}</h1>
-        <p>Role: {userProfile.role}</p>
-        <button style={styles.button} onClick={() => supabase.auth.signOut()}>
-          Sign Out
-        </button>
-      </div>
-    )
+    return <GuardScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
+  }
+  if (userProfile.role === 'resident') {
+    return <ResidentScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
+  }
+  if (userProfile.role === 'admin') {
+    return <AdminDashboard profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
   }
 
+  // Admin and supervisor placeholder for now
   return (
-    <>
-      {userProfile.force_password_change && !passwordReminderSnoozed && (
-        <PasswordReminderBanner
-          onChangePassword={openSettings}
-          onSnooze={() => setPasswordReminderSnoozed(true)}
-        />
-      )}
-      {content}
-    </>
+    <div style={styles.center}>
+      <h1>Welcome, {userProfile.full_name}</h1>
+      <p>Role: {userProfile.role}</p>
+      <button style={styles.button} onClick={() => supabase.auth.signOut()}>
+        Sign Out
+      </button>
+    </div>
   )
 }
 

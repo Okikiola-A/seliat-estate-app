@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../context/useTheme'
 
-export default function ConfirmModal({ title, message, onConfirm, onCancel, countdownSeconds = 5 }) {
+export default function ConfirmModal({ title, message, onConfirm, onCancel, countdownSeconds = 3 }) {
   const { theme } = useTheme()
   const [countdown, setCountdown] = useState(countdownSeconds)
 
