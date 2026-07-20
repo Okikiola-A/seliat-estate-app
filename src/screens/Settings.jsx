@@ -123,9 +123,17 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
 
     // Clears any pending "temporary password" reminder — this is now the
     // only place a temp/forced password change can actually be completed.
+    // Goes through an RPC (not a direct table update) because
+    // trg_enforce_safe_user_fields_upd blocks non-admins from touching
+    // this column themselves, even their own row — a plain client-side
+    // update here would silently affect 0 rows.
     if (profile.force_password_change) {
-      await supabase.from('users').update({ force_password_change: false }).eq('id', profile.id)
-      onPasswordChanged?.()
+      const { error: clearError } = await supabase.rpc('clear_own_force_password_change')
+      if (clearError) {
+        console.error('Failed to clear temporary-password flag:', clearError)
+      } else {
+        onPasswordChanged?.()
+      }
     }
 
     setPasswordSaving(false)

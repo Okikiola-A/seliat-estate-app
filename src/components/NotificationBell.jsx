@@ -28,7 +28,7 @@ export default function NotificationBell({ userId }) {
     dropdown: {
       position: 'absolute', top: 'calc(100% + 0.5rem)', right: 0,
       backgroundColor: theme.surface, borderRadius: '10px', boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-      minWidth: '280px', maxWidth: '320px', overflow: 'hidden', zIndex: 200,
+      minWidth: '280px', maxWidth: '320px', overflow: 'hidden', zIndex: 500,
       transformOrigin: 'top right',
       transition: 'opacity 0.16s ease, transform 0.16s ease',
       opacity: visible ? 1 : 0,
@@ -81,23 +81,6 @@ export default function NotificationBell({ userId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        closeMenu()
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
-    }
-  }, [])
-
   const unreadCount = notifications.filter(n => !n.read).length
 
   // Mount the dropdown, then flip `visible` on the next frame so the
@@ -124,6 +107,22 @@ export default function NotificationBell({ userId }) {
     setVisible(false)
     closeTimerRef.current = setTimeout(() => setOpen(false), 160)
   }
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        closeMenu()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
+  }, [])
 
   const handleOpen = () => {
     if (open) closeMenu()

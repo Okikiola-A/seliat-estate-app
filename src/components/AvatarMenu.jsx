@@ -35,7 +35,7 @@ export default function AvatarMenu({ name, subtitle, onSettingsClick }) {
       minWidth: '180px',
       maxWidth: '240px',
       overflow: 'hidden',
-      zIndex: 200,
+      zIndex: 500,
       transformOrigin: 'top right',
       transition: 'opacity 0.16s ease, transform 0.16s ease',
       opacity: visible ? 1 : 0,
@@ -85,17 +85,6 @@ export default function AvatarMenu({ name, subtitle, onSettingsClick }) {
     },
   }
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        closeMenu()
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // Mount the dropdown, then flip `visible` on the next frame so the
   // transition actually animates in from its initial (hidden) state instead
   // of snapping straight to open.
@@ -114,6 +103,16 @@ export default function AvatarMenu({ name, subtitle, onSettingsClick }) {
     setVisible(false)
     closeTimerRef.current = setTimeout(() => setOpen(false), 160)
   }
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        closeMenu()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const toggleMenu = () => {
     if (open) closeMenu()
