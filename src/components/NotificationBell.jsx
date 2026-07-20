@@ -28,7 +28,7 @@ export default function NotificationBell({ userId }) {
     dropdown: {
       position: 'absolute', top: 'calc(100% + 0.5rem)', right: 0,
       backgroundColor: theme.surface, borderRadius: '10px', boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-      minWidth: '280px', maxWidth: '320px', overflow: 'hidden', zIndex: 500,
+      minWidth: '280px', maxWidth: '320px', overflow: 'hidden', zIndex: 200,
       transformOrigin: 'top right',
       transition: 'opacity 0.16s ease, transform 0.16s ease',
       opacity: visible ? 1 : 0,

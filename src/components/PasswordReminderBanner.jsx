@@ -7,7 +7,15 @@ export default function PasswordReminderBanner({ onChangePassword, onSnooze }) {
     banner: {
       position: 'sticky',
       top: 0,
-      zIndex: 400,
+      // Deliberately lower than each screen's header (zIndex 150) — the
+      // header uses position:sticky with its own z-index, which creates a
+      // stacking context that traps its children (the avatar/notification
+      // dropdowns) inside it. If this banner's z-index were higher than
+      // the header's, no z-index set on those dropdowns could ever escape
+      // above it, since a descendant can't out-rank a sibling of its own
+      // stacking-context-creating ancestor. Staying below the header is
+      // what lets the dropdowns render on top correctly.
+      zIndex: 100,
       backgroundColor: theme.warningBg,
       borderBottom: `1px solid ${theme.warningBorder}`,
       color: theme.warningText,

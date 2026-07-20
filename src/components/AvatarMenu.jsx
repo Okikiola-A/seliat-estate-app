@@ -35,7 +35,7 @@ export default function AvatarMenu({ name, subtitle, onSettingsClick }) {
       minWidth: '180px',
       maxWidth: '240px',
       overflow: 'hidden',
-      zIndex: 500,
+      zIndex: 200,
       transformOrigin: 'top right',
       transition: 'opacity 0.16s ease, transform 0.16s ease',
       opacity: visible ? 1 : 0,
