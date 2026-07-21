@@ -81,7 +81,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     }
 
     const newCode = generateCode()
-    const expiry = new Date(Date.now() + 3 * 60 * 60 * 1000)
+    const expiry = new Date(Date.now() + 12 * 60 * 60 * 1000)
 
     const { error } = await supabase
       .from('delivery_codes')
@@ -135,7 +135,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
 
   const getWhatsAppMessage = (code, expiresAt) => {
     const expiry = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: ${code}\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
+    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: *${code}*\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
     return `https://wa.me/?text=${encodeURIComponent(message)}`
   }
 
@@ -522,7 +522,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
               </div>
               <div>
                 <p style={styles.cardLabel}>No Active Code</p>
-                <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 3 hours.</p>
+                <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 12 hours.</p>
               </div>
             </div>
 

@@ -11,7 +11,7 @@ const SUPPORT_EMAIL = 'seliatestatesupport@gmail.com'
 const getSupportMailto = (profile) => {
   const subject = `Support request — ${profile.full_name || 'Resident'} (${profile.role})`
   const bodyLines = [
-    'Hi Seliat Estate Support,',
+    'Hi Seliat Estate CDA Support,',
     '',
     'Please describe your issue below:',
     '',

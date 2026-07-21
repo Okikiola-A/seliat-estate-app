@@ -173,7 +173,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     }
 
     const newCode = generateCode()
-    const expiry = new Date(Date.now() + 3 * 60 * 60 * 1000)
+    const expiry = new Date(Date.now() + 12 * 60 * 60 * 1000)
 
     const { error } = await supabase
       .from('delivery_codes')
@@ -190,7 +190,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
 
   const getMyWhatsAppMessage = (code, expiresAt) => {
     const expiry = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: ${code}\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
+    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: *${code}*\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
     return `https://wa.me/?text=${encodeURIComponent(message)}`
   }
 
@@ -567,8 +567,6 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     addressCell: { display: 'flex', alignItems: 'baseline', gap: '0.3rem', minWidth: 0 },
     addressNumber: { flexShrink: 0, fontWeight: '600' },
     addressStreet: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 },
-    actionsHeaderNarrow: { width: '44px' },
-    actionsHeaderMedium: { width: '76px' },
     nameLink: { background: 'none', border: 'none', color: theme.primary, fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem', padding: 0, textAlign: 'left' },
     deleteIconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center' },
     revokePill: { padding: '0.15rem 0.5rem', borderRadius: '5px', border: `1.2px solid ${theme.dangerBorder}`, backgroundColor: theme.dangerBg, color: theme.danger, fontSize: '0.68rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", lineHeight: '1.4', whiteSpace: 'nowrap' },
@@ -681,7 +679,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
 
       <div style={{ ...styles.sidebar, transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}>
         <div style={styles.sidebarTitle}>
-          <p style={styles.sidebarTitleText}>Seliat Estate</p>
+          <p style={styles.sidebarTitleText}>Seliat Estate CDA</p>
           <p style={styles.sidebarTitleSub}>Admin Menu</p>
         </div>
 
@@ -867,7 +865,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                 ) : (
                   <div style={styles.card}>
                     <p style={styles.cardLabelBlue}>No Active Code</p>
-                    <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 3 hours.</p>
+                    <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 12 hours.</p>
                     {myError && <p style={{ color: theme.danger, fontSize: '0.85rem' }}>{myError}</p>}
                     <button
                       style={{ ...styles.generateBtn, opacity: myGenerating ? 0.7 : 1 }}

@@ -287,7 +287,7 @@ export default function Login() {
 
       <div style={styles.card}>
         <div style={styles.brandSection}>
-          <h1 style={styles.title}>Seliat Estate</h1>
+          <h1 style={styles.title}>Seliat Estate CDA</h1>
           <p style={styles.subtitle}>Please enter your details</p>
         </div>
 

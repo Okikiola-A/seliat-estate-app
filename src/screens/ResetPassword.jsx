@@ -4,10 +4,12 @@ import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from "../components/PeekPasswordInput"
 import { validatePassword } from '../utils/helpers'
 
-export default function ResetPassword({ onDone, requireCurrentPassword = false }) {
+// This screen is only reached via a real password-recovery session (a
+// clicked emailed reset link) — Supabase doesn't require the current
+// password to be supplied in that case, unlike a normal signed-in session,
+// which is why there's no current-password field here.
+export default function ResetPassword({ onDone }) {
   const { theme } = useTheme()
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -17,7 +19,6 @@ export default function ResetPassword({ onDone, requireCurrentPassword = false }
   const [focusedField, setFocusedField] = useState(null)
 
   const validate = () => {
-    if (requireCurrentPassword && !currentPassword) return 'Please enter your current (temporary) password'
     if (!password) return 'Please enter a new password'
     const passwordError = validatePassword(password)
     if (passwordError) return passwordError
@@ -31,12 +32,7 @@ export default function ResetPassword({ onDone, requireCurrentPassword = false }
     setLoading(true)
     setError(null)
 
-    // Supabase's "require current password" setting checks the password
-    // passed directly as `current_password` on this same call — it does
-    // not accept a separate reauthentication step beforehand as proof.
-    const { error } = await supabase.auth.updateUser(
-      requireCurrentPassword ? { password, current_password: currentPassword } : { password }
-    )
+    const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
       setError(error.message)
@@ -242,38 +238,6 @@ export default function ResetPassword({ onDone, requireCurrentPassword = false }
         </div>
 
         <div style={styles.form}>
-          {requireCurrentPassword && (
-            <div style={styles.fieldGroup}>
-              <label style={styles.label}>Current (temporary) password</label>
-              <div style={styles.fieldWrap}>
-                <PeekPasswordInput
-                  style={inputStyle('currentPassword')}
-                  placeholder="The password you were given"
-                  value={currentPassword}
-                  showPassword={showCurrentPassword}
-                  onChange={e => { setCurrentPassword(e.target.value); setError(null) }}
-                  onFocus={() => setFocusedField('currentPassword')}
-                  onBlur={() => setFocusedField(null)}
-                  onKeyDown={e => e.key === 'Enter' && handleReset()}
-                />
-                <button type="button" style={styles.eyeBtn} onClick={() => setShowCurrentPassword(p => !p)} tabIndex={-1} aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
-                  {showCurrentPassword ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                      <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
           <div style={styles.fieldGroup}>
             <label style={styles.label}>New password</label>
             <div style={styles.fieldWrap}>
