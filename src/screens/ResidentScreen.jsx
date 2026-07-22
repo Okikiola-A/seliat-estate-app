@@ -81,11 +81,10 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     }
 
     const newCode = generateCode()
-    const expiry = new Date(Date.now() + 12 * 60 * 60 * 1000)
 
     const { error } = await supabase
       .from('delivery_codes')
-      .insert({ code: newCode, resident_id: profile.id, expires_at: expiry.toISOString() })
+      .insert({ code: newCode, resident_id: profile.id })
 
     if (error) {
       console.error('Failed to generate code:', error)
