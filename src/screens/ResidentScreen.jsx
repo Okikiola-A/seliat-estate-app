@@ -88,6 +88,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
       .insert({ code: newCode, resident_id: profile.id, expires_at: expiry.toISOString() })
 
     if (error) {
+      console.error('Failed to generate code:', error)
       setError('Something went wrong. Please try again.')
       setGenerating(false)
       return
