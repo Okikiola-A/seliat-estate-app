@@ -140,7 +140,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   const fetchMyCode = async () => {
     const { data } = await supabase
       .from('delivery_codes')
-      .select('*')
+      .select('id, code, created_at, used, used_at, revoked, expires_at')
       .eq('resident_id', profile.id)
       .order('created_at', { ascending: false })
 
@@ -218,7 +218,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   }
 
   const fetchAnalytics = async () => {
-    const { data } = await supabase.from('delivery_codes').select('*')
+    const { data } = await supabase.from('delivery_codes').select('created_at, used, revoked, expires_at')
     if (!data) return
     const now = new Date()
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())

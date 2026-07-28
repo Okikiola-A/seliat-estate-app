@@ -38,7 +38,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     setLoading(true)
     const { data } = await supabase
       .from('delivery_codes')
-      .select('*')
+      .select('id, code, created_at, used, used_at, revoked, expires_at')
       .eq('resident_id', profile.id)
       .order('created_at', { ascending: false })
 
