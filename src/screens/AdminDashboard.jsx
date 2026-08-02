@@ -53,6 +53,8 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   const [myHistoryPage, setMyHistoryPage] = useState(1)
   const [residentCodesPage, setResidentCodesPage] = useState(1)
   const [myRevoking, setMyRevoking] = useState(false)
+  const [codeSettings, setCodeSettings] = useState({ default_expiry_hours: 12, max_expiry_hours: 12 })
+  const [durationHours, setDurationHours] = useState(12)
 
   const [createForm, setCreateForm] = useState({
     full_name: '', email: '', phone: '', role: 'resident', block_number: '', house_number: '',
@@ -174,9 +176,10 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
 
     const newCode = generateCode()
 
-    const { error } = await supabase
-      .from('delivery_codes')
-      .insert({ code: newCode, resident_id: profile.id })
+    const { error } = await supabase.rpc('generate_delivery_code', {
+      p_code: newCode,
+      p_duration_hours: durationHours,
+    })
 
     if (error) {
       console.error('Failed to generate code:', error)
@@ -257,6 +260,15 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
+
+  useEffect(() => {
+    supabase.from('app_settings').select('default_expiry_hours, max_expiry_hours').single().then(({ data }) => {
+      if (data) {
+        setCodeSettings(data)
+        setDurationHours(data.default_expiry_hours)
+      }
+    })
+  }, [])
 
   const fetchResidentCodes = async (resident) => {
     setSelectedResident(resident)
@@ -555,6 +567,10 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     whatsappBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: 'none', backgroundColor: '#25D366', color: 'white', fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', textDecoration: 'none', textAlign: 'center', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center' },
     codeRevokeIconBtn: { position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     generateBtn: { backgroundColor: theme.primary, color: theme.primaryText, border: 'none', borderRadius: '6px', padding: '0.85rem', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", width: '100%' },
+    durationRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' },
+    durationLabel: { fontSize: '0.85rem', fontWeight: '600', color: theme.textSecondary },
+    durationInput: { width: '70px', padding: '0.5rem 0.6rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', fontWeight: '600', color: theme.textPrimary, backgroundColor: theme.surface, fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box' },
+    durationUnit: { fontSize: '0.78rem', color: theme.textMuted, fontWeight: '500' },
     searchWrap: { position: 'relative', flex: 1, display: 'flex', alignItems: 'center' },
     searchIcon: { position: 'absolute', left: '0.75rem', pointerEvents: 'none' },
     searchInput: { width: '100%', padding: '0.65rem 0.75rem 0.65rem 2.25rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, backgroundColor: theme.surface, fontSize: '0.875rem', color: theme.textPrimary, fontFamily: "'DM Sans', sans-serif", fontWeight: '500', boxSizing: 'border-box' },
@@ -865,7 +881,22 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                 ) : (
                   <div style={styles.card}>
                     <p style={styles.cardLabelBlue}>No Active Code</p>
-                    <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 12 hours.</p>
+                    <p style={styles.cardSub}>Generate a one-time code for your courier.</p>
+                    <div style={styles.durationRow}>
+                      <label style={styles.durationLabel}>Valid for</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={codeSettings.max_expiry_hours}
+                        value={durationHours}
+                        onChange={e => {
+                          const raw = Number(e.target.value) || 1
+                          setDurationHours(Math.max(1, Math.min(codeSettings.max_expiry_hours, raw)))
+                        }}
+                        style={styles.durationInput}
+                      />
+                      <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
+                    </div>
                     {myError && <p style={{ color: theme.danger, fontSize: '0.85rem' }}>{myError}</p>}
                     <button
                       style={{ ...styles.generateBtn, opacity: myGenerating ? 0.7 : 1 }}

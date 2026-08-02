@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { formatNigerianPhone, validatePhone, validatePassword } from '../utils/helpers'
@@ -32,11 +32,60 @@ const getSupportMailto = (profile) => {
 export default function Settings({ profile, onBack, onPasswordChanged, focusPasswordSection = false }) {
   const { theme, isDark, toggleTheme } = useTheme()
   const isResident = profile.role === 'resident'
+  const isAdmin = profile.role === 'admin'
 
   const [fullName, setFullName] = useState(profile.full_name || '')
   const [phone, setPhone] = useState(profile.phone || '')
   const [street, setStreet] = useState(profile.block_number || '')
   const [houseNumber, setHouseNumber] = useState(profile.house_number || '')
+
+  const [codeDefaultHours, setCodeDefaultHours] = useState(12)
+  const [codeMaxHours, setCodeMaxHours] = useState(12)
+  const [codeSettingsSaving, setCodeSettingsSaving] = useState(false)
+  const [codeSettingsError, setCodeSettingsError] = useState(null)
+  const [codeSettingsSaved, setCodeSettingsSaved] = useState(false)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.from('app_settings').select('default_expiry_hours, max_expiry_hours').single().then(({ data }) => {
+      if (data) {
+        setCodeDefaultHours(data.default_expiry_hours)
+        setCodeMaxHours(data.max_expiry_hours)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const saveCodeSettings = async () => {
+    setCodeSettingsError(null)
+
+    if (codeDefaultHours < 1 || codeMaxHours < 1) {
+      setCodeSettingsError('Both values must be at least 1 hour')
+      return
+    }
+    if (codeDefaultHours > codeMaxHours) {
+      setCodeSettingsError('Default duration cannot be greater than the maximum')
+      return
+    }
+
+    setCodeSettingsSaving(true)
+
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ default_expiry_hours: codeDefaultHours, max_expiry_hours: codeMaxHours, updated_at: new Date() })
+      .eq('id', true)
+
+    if (error) {
+      console.error('Failed to save code expiration settings:', error)
+      setCodeSettingsError('Something went wrong. Please try again.')
+      setCodeSettingsSaving(false)
+      return
+    }
+
+    setCodeSettingsSaving(false)
+    setCodeSettingsSaved(true)
+    setTimeout(() => setCodeSettingsSaved(false), 3000)
+  }
 
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState(null)
@@ -406,6 +455,43 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
             </button>
           </div>
         </CollapsibleSection>
+
+        {isAdmin && (
+          <CollapsibleSection title="Code Expiration Settings" subtitle="Set the default and maximum access code duration">
+            <div style={styles.fieldGroup}>
+              <label style={styles.label}>Default duration (hours)</label>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={codeDefaultHours}
+                onChange={e => { setCodeDefaultHours(Number(e.target.value) || 1); setCodeSettingsSaved(false) }}
+              />
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.label}>Maximum duration residents can choose (hours)</label>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={codeMaxHours}
+                onChange={e => { setCodeMaxHours(Number(e.target.value) || 1); setCodeSettingsSaved(false) }}
+              />
+            </div>
+
+            {codeSettingsError && <p style={styles.errorText}>{codeSettingsError}</p>}
+            {codeSettingsSaved && <p style={styles.successText}>Code expiration settings updated.</p>}
+
+            <button
+              style={{ ...styles.saveBtn, opacity: codeSettingsSaving ? 0.7 : 1 }}
+              onClick={saveCodeSettings}
+              disabled={codeSettingsSaving}
+            >
+              {codeSettingsSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </CollapsibleSection>
+        )}
 
         <CollapsibleSection title="Profile Details" subtitle="Name, phone, and address">
           <div style={styles.fieldGroup}>

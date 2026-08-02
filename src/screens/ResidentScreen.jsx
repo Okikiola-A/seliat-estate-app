@@ -24,6 +24,8 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
   const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [page, setPage] = useState(1)
+  const [codeSettings, setCodeSettings] = useState({ default_expiry_hours: 12, max_expiry_hours: 12 })
+  const [durationHours, setDurationHours] = useState(12)
 
   useEffect(() => {
     if (openSettingsSignal) {
@@ -57,6 +59,12 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     // dependency array to avoid refetching on every render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCodes()
+    supabase.from('app_settings').select('default_expiry_hours, max_expiry_hours').single().then(({ data }) => {
+      if (data) {
+        setCodeSettings(data)
+        setDurationHours(data.default_expiry_hours)
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -82,9 +90,10 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
 
     const newCode = generateCode()
 
-    const { error } = await supabase
-      .from('delivery_codes')
-      .insert({ code: newCode, resident_id: profile.id })
+    const { error } = await supabase.rpc('generate_delivery_code', {
+      p_code: newCode,
+      p_duration_hours: durationHours,
+    })
 
     if (error) {
       console.error('Failed to generate code:', error)
@@ -327,6 +336,34 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
       width: '100%',
       transition: 'opacity 0.15s',
     },
+    durationRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.6rem',
+      flexWrap: 'wrap',
+    },
+    durationLabel: {
+      fontSize: '0.85rem',
+      fontWeight: '600',
+      color: theme.textSecondary,
+    },
+    durationInput: {
+      width: '70px',
+      padding: '0.5rem 0.6rem',
+      borderRadius: '6px',
+      border: `1.5px solid ${theme.border}`,
+      fontSize: '0.9rem',
+      fontWeight: '600',
+      color: theme.textPrimary,
+      backgroundColor: theme.surface,
+      fontFamily: "'DM Sans', sans-serif",
+      boxSizing: 'border-box',
+    },
+    durationUnit: {
+      fontSize: '0.78rem',
+      color: theme.textMuted,
+      fontWeight: '500',
+    },
     spinnerWrap: {
       display: 'flex',
       alignItems: 'center',
@@ -522,8 +559,24 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
               </div>
               <div>
                 <p style={styles.cardLabel}>No Active Code</p>
-                <p style={styles.cardSub}>Generate a one-time code for your courier. Valid for 12 hours.</p>
+                <p style={styles.cardSub}>Generate a one-time code for your courier.</p>
               </div>
+            </div>
+
+            <div style={styles.durationRow}>
+              <label style={styles.durationLabel}>Valid for</label>
+              <input
+                type="number"
+                min={1}
+                max={codeSettings.max_expiry_hours}
+                value={durationHours}
+                onChange={e => {
+                  const raw = Number(e.target.value) || 1
+                  setDurationHours(Math.max(1, Math.min(codeSettings.max_expiry_hours, raw)))
+                }}
+                style={styles.durationInput}
+              />
+              <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
             </div>
 
             {error && (
