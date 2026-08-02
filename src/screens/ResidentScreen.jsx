@@ -69,8 +69,15 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
   }, [])
 
   const requestCode = async () => {
-    setGenerating(true)
     setError(null)
+
+    const parsedDuration = Number(durationHours)
+    if (!durationHours || Number.isNaN(parsedDuration) || parsedDuration < 1 || parsedDuration > codeSettings.max_expiry_hours) {
+      setError(`Please enter a duration between 1 and ${codeSettings.max_expiry_hours} hours.`)
+      return
+    }
+
+    setGenerating(true)
 
     const { data: existing } = await supabase
       .from('delivery_codes')
@@ -92,7 +99,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
 
     const { error } = await supabase.rpc('generate_delivery_code', {
       p_code: newCode,
-      p_duration_hours: durationHours,
+      p_duration_hours: parsedDuration,
     })
 
     if (error) {
@@ -570,10 +577,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
                 min={1}
                 max={codeSettings.max_expiry_hours}
                 value={durationHours}
-                onChange={e => {
-                  const raw = Number(e.target.value) || 1
-                  setDurationHours(Math.max(1, Math.min(codeSettings.max_expiry_hours, raw)))
-                }}
+                onChange={e => setDurationHours(e.target.value)}
                 style={styles.durationInput}
               />
               <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>

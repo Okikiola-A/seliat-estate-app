@@ -59,11 +59,14 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
   const saveCodeSettings = async () => {
     setCodeSettingsError(null)
 
-    if (codeDefaultHours < 1 || codeMaxHours < 1) {
+    const parsedDefault = Number(codeDefaultHours)
+    const parsedMax = Number(codeMaxHours)
+
+    if (!codeDefaultHours || !codeMaxHours || Number.isNaN(parsedDefault) || Number.isNaN(parsedMax) || parsedDefault < 1 || parsedMax < 1) {
       setCodeSettingsError('Both values must be at least 1 hour')
       return
     }
-    if (codeDefaultHours > codeMaxHours) {
+    if (parsedDefault > parsedMax) {
       setCodeSettingsError('Default duration cannot be greater than the maximum')
       return
     }
@@ -72,7 +75,7 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
 
     const { error } = await supabase
       .from('app_settings')
-      .update({ default_expiry_hours: codeDefaultHours, max_expiry_hours: codeMaxHours, updated_at: new Date() })
+      .update({ default_expiry_hours: parsedDefault, max_expiry_hours: parsedMax, updated_at: new Date() })
       .eq('id', true)
 
     if (error) {
@@ -457,7 +460,7 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
         </CollapsibleSection>
 
         {isAdmin && (
-          <CollapsibleSection title="Code Expiration Settings" subtitle="Set the default and maximum access code duration">
+          <CollapsibleSection title="Code Expiration" subtitle="Set the default and maximum access code duration">
             <div style={styles.fieldGroup}>
               <label style={styles.label}>Default duration (hours)</label>
               <input
@@ -465,7 +468,7 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
                 type="number"
                 min={1}
                 value={codeDefaultHours}
-                onChange={e => { setCodeDefaultHours(Number(e.target.value) || 1); setCodeSettingsSaved(false) }}
+                onChange={e => { setCodeDefaultHours(e.target.value); setCodeSettingsSaved(false) }}
               />
             </div>
 
@@ -476,7 +479,7 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
                 type="number"
                 min={1}
                 value={codeMaxHours}
-                onChange={e => { setCodeMaxHours(Number(e.target.value) || 1); setCodeSettingsSaved(false) }}
+                onChange={e => { setCodeMaxHours(e.target.value); setCodeSettingsSaved(false) }}
               />
             </div>
 

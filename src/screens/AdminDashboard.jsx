@@ -155,8 +155,15 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
   }
 
   const generateMyCode = async () => {
-    setMyGenerating(true)
     setMyError(null)
+
+    const parsedDuration = Number(durationHours)
+    if (!durationHours || Number.isNaN(parsedDuration) || parsedDuration < 1 || parsedDuration > codeSettings.max_expiry_hours) {
+      setMyError(`Please enter a duration between 1 and ${codeSettings.max_expiry_hours} hours.`)
+      return
+    }
+
+    setMyGenerating(true)
 
     const { data: existing } = await supabase
       .from('delivery_codes')
@@ -178,7 +185,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
 
     const { error } = await supabase.rpc('generate_delivery_code', {
       p_code: newCode,
-      p_duration_hours: durationHours,
+      p_duration_hours: parsedDuration,
     })
 
     if (error) {
@@ -571,6 +578,10 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     durationLabel: { fontSize: '0.85rem', fontWeight: '600', color: theme.textSecondary },
     durationInput: { width: '70px', padding: '0.5rem 0.6rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', fontWeight: '600', color: theme.textPrimary, backgroundColor: theme.surface, fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box' },
     durationUnit: { fontSize: '0.78rem', color: theme.textMuted, fontWeight: '500' },
+    historyCard: { backgroundColor: theme.surface, borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: `1px solid ${theme.border}`, overflow: 'hidden' },
+    historyItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1rem' },
+    historyCode: { fontFamily: "'DM Sans', sans-serif", fontWeight: '700', fontSize: '1rem', letterSpacing: '0.1rem', color: theme.textPrimary },
+    historyDate: { fontSize: '0.75rem', color: theme.textMuted, margin: '3px 0 0 0', fontWeight: '500' },
     searchWrap: { position: 'relative', flex: 1, display: 'flex', alignItems: 'center' },
     searchIcon: { position: 'absolute', left: '0.75rem', pointerEvents: 'none' },
     searchInput: { width: '100%', padding: '0.65rem 0.75rem 0.65rem 2.25rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, backgroundColor: theme.surface, fontSize: '0.875rem', color: theme.textPrimary, fontFamily: "'DM Sans', sans-serif", fontWeight: '500', boxSizing: 'border-box' },
@@ -889,10 +900,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                         min={1}
                         max={codeSettings.max_expiry_hours}
                         value={durationHours}
-                        onChange={e => {
-                          const raw = Number(e.target.value) || 1
-                          setDurationHours(Math.max(1, Math.min(codeSettings.max_expiry_hours, raw)))
-                        }}
+                        onChange={e => setDurationHours(e.target.value)}
                         style={styles.durationInput}
                       />
                       <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
@@ -909,30 +917,32 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                 )}
 
                 {myHistory.length > 0 && (
-                  <div className="grid-table-card" style={styles.tableCard}>
-                    <div className="grid-table" style={{ gridTemplateColumns: 'auto auto auto' }}>
-                      <div className="grid-header-cell" style={styles.gridHeaderCell}>Code</div>
-                      <div className="grid-header-cell" style={styles.gridHeaderCell}>Date</div>
-                      <div className="grid-header-cell" style={styles.gridHeaderCell}>Status</div>
-                      {paginate(myHistory, myHistoryPage).map(code => {
+                  <>
+                    <div style={styles.historyCard}>
+                      {paginate(myHistory, myHistoryPage).map((code, index, arr) => {
                         const status = getCodeStatus(code)
                         return (
-                          <div className="grid-row" key={code.id}>
-                            <div className="grid-cell" style={{ ...styles.gridCell, fontWeight: '700', letterSpacing: '0.1em' }}>
-                              {code.code}
+                          <div
+                            key={code.id}
+                            style={{
+                              ...styles.historyItem,
+                              borderBottom: index < arr.length - 1 ? `1px solid ${theme.border}` : 'none',
+                            }}
+                          >
+                            <div>
+                              <span style={styles.historyCode}>{code.code}</span>
+                              <p style={styles.historyDate}>{formatDate(code.created_at)}</p>
+                              {code.used_at && (
+                                <p style={styles.historyDate}>Used {formatDate(code.used_at)}</p>
+                              )}
                             </div>
-                            <div className="grid-cell" style={styles.gridCell}>
-                              {formatDate(code.created_at)}
-                            </div>
-                            <div className="grid-cell" style={styles.gridCell}>
-                              <Badge label={status.label} variant={status.label.toLowerCase()} />
-                            </div>
+                            <Badge label={status.label} variant={status.label.toLowerCase()} />
                           </div>
                         )
                       })}
                     </div>
                     <Pagination page={myHistoryPage} itemCount={myHistory.length} onPageChange={setMyHistoryPage} />
-                  </div>
+                  </>
                 )}
               </div>
             )}
