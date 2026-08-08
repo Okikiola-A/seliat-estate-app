@@ -74,6 +74,36 @@ export const getCodeStatus = (code) => {
   return { label: 'Active', color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' }
 }
 
+export const getAccessCodeShareMessage = (code, expiresAt) => {
+  const expiry = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return `Hello, here is your access code for Seliat Estate:\n\nCode: *${code}*\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
+}
+
+// Opens the device's native share sheet so the user can pick WhatsApp, SMS,
+// email, or whatever else is installed — instead of being locked into
+// WhatsApp specifically. Falls back to a WhatsApp deep link on browsers/
+// devices without navigator.share support (most desktop browsers, some
+// older Android WebViews).
+export const shareAccessCode = async (code, expiresAt) => {
+  const message = getAccessCodeShareMessage(code, expiresAt)
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Seliat Estate Access Code', text: message })
+      return
+    } catch (err) {
+      // User cancelled the native share sheet — respect that, don't force
+      // a WhatsApp fallback on top of a deliberate cancel.
+      if (err.name === 'AbortError') return
+      // Any other failure (share target crashed, unsupported payload,
+      // etc.) falls through to the WhatsApp link below instead of leaving
+      // the user with no way to share at all.
+    }
+  }
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+}
+
 export const generateTempPassword = () => {
   const lower = 'abcdefghijkmnpqrstuvwxyz'
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'

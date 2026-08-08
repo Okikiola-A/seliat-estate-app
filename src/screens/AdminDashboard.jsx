@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
-import { capitalizeName, formatDate, getCodeStatus, generateCode, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone } from '../utils/helpers'
+import { capitalizeName, formatDate, getCodeStatus, generateCode, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
 import { responsiveTableCSS } from '../utils/responsiveTableStyles'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
@@ -214,12 +214,6 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     }
     await fetchMyCode()
     setMyGenerating(false)
-  }
-
-  const getMyWhatsAppMessage = (code, expiresAt) => {
-    const expiry = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: *${code}*\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
-    return `https://wa.me/?text=${encodeURIComponent(message)}`
   }
 
   const copyMyCode = (code) => {
@@ -589,7 +583,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     expiryText: { fontSize: '0.82rem', fontWeight: '600', color: theme.danger, margin: 0, textAlign: 'center' },
     actionRow: { display: 'flex', gap: '0.75rem' },
     copyBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, backgroundColor: theme.surface, color: theme.textPrimary, fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", textAlign: 'center' },
-    whatsappBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: 'none', backgroundColor: '#25D366', color: 'white', fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', textDecoration: 'none', textAlign: 'center', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    shareBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: 'none', backgroundColor: theme.primary, color: theme.primaryText, fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', textDecoration: 'none', textAlign: 'center', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' },
     codeRevokeIconBtn: { position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     generateBtn: { backgroundColor: theme.primary, color: theme.primaryText, border: 'none', borderRadius: '6px', padding: '0.85rem', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", width: '100%' },
     durationRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' },
@@ -901,13 +895,20 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                       <button style={styles.copyBtn} onClick={() => copyMyCode(myActiveCode.code)}>
                         {myCopied ? 'Copied!' : 'Copy Code'}
                       </button>
-                      <a
-                        href={getMyWhatsAppMessage(myActiveCode.code, myActiveCode.expires_at)}
-                        target="_blank" rel="noopener noreferrer"
-                        style={styles.whatsappBtn}
+                      <button
+                        type="button"
+                        style={styles.shareBtn}
+                        onClick={() => shareAccessCode(myActiveCode.code, myActiveCode.expires_at)}
                       >
-                        Share on WhatsApp
-                      </a>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3"/>
+                          <circle cx="6" cy="12" r="3"/>
+                          <circle cx="18" cy="19" r="3"/>
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                        </svg>
+                        Share Code
+                      </button>
                     </div>
                   </div>
                 ) : (

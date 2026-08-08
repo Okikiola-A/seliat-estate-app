@@ -10,7 +10,7 @@ import Pagination from '../components/Pagination'
 import { paginate } from '../utils/pagination'
 import Settings from './Settings'
 
-import { generateCode, formatDate, getCodeStatus, capitalizeName } from '../utils/helpers'
+import { generateCode, formatDate, getCodeStatus, capitalizeName, shareAccessCode } from '../utils/helpers'
 
 export default function ResidentScreen({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
@@ -149,12 +149,6 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     setRevoking(false)
   }
 
-  const getWhatsAppMessage = (code, expiresAt) => {
-    const expiry = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const message = `Hello, here is your access code for Seliat Estate:\n\nCode: *${code}*\n\nShow this code to the gate guard on arrival.\nValid until: ${expiry}\n\nDo not share this code with anyone else.`
-    return `https://wa.me/?text=${encodeURIComponent(message)}`
-  }
-
   const copyCode = (code) => {
     navigator.clipboard.writeText(code)
     setCopied(true)
@@ -285,13 +279,13 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
       fontFamily: "'DM Sans', sans-serif",
       textAlign: 'center',
     },
-    whatsappBtn: {
+    shareBtn: {
       flex: 1,
       padding: '0.8rem',
       borderRadius: '6px',
       border: 'none',
-      backgroundColor: '#25D366',
-      color: 'white',
+      backgroundColor: theme.primary,
+      color: theme.primaryText,
       fontSize: '0.9rem',
       fontWeight: '700',
       cursor: 'pointer',
@@ -301,6 +295,7 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: '0.4rem',
     },
     codeRevokeIconBtn: {
       position: 'absolute',
@@ -545,14 +540,20 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
               >
                 {copied ? 'Copied!' : 'Copy Code'}
               </button>
-              <a
-                href={getWhatsAppMessage(activeCode.code, activeCode.expires_at)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.whatsappBtn}
+              <button
+                type="button"
+                style={styles.shareBtn}
+                onClick={() => shareAccessCode(activeCode.code, activeCode.expires_at)}
               >
-                Share on WhatsApp
-              </a>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3"/>
+                  <circle cx="6" cy="12" r="3"/>
+                  <circle cx="18" cy="19" r="3"/>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                Share Code
+              </button>
             </div>
           </div>
         ) : (
