@@ -460,7 +460,7 @@ export default function Settings({ profile, onBack, onPasswordChanged, focusPass
         </CollapsibleSection>
 
         {isAdmin && (
-          <CollapsibleSection title="Code Expiration" subtitle="Set the default and maximum access code duration">
+          <CollapsibleSection title="Code Expiration" subtitle="Set the access code duration">
             <div style={styles.fieldGroup}>
               <label style={styles.label}>Default duration (hours)</label>
               <input

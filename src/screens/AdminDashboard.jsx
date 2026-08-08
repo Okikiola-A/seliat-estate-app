@@ -154,6 +154,24 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     }
   }
 
+  const clearMyHistory = async () => {
+    const { error } = await supabase
+      .from('delivery_codes')
+      .delete()
+      .eq('resident_id', profile.id)
+
+    setConfirmModal(null)
+
+    if (error) {
+      console.error('Failed to clear history:', error)
+      alert('Could not clear history. Please try again.')
+      return
+    }
+
+    setMyHistoryPage(1)
+    fetchMyCode()
+  }
+
   const generateMyCode = async () => {
     setMyError(null)
 
@@ -578,6 +596,9 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     durationLabel: { fontSize: '0.85rem', fontWeight: '600', color: theme.textSecondary },
     durationInput: { width: '70px', padding: '0.5rem 0.6rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', fontWeight: '600', color: theme.textPrimary, backgroundColor: theme.surface, fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box' },
     durationUnit: { fontSize: '0.78rem', color: theme.textMuted, fontWeight: '500' },
+    historyTopRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '0.25rem', paddingRight: '0.25rem' },
+    historyTitle: { fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, margin: 0 },
+    clearHistoryBtn: { padding: '0.35rem 0.75rem', borderRadius: '6px', border: `1.5px solid ${theme.dangerBorder}`, backgroundColor: theme.dangerBg, color: theme.danger, fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap' },
     historyCard: { backgroundColor: theme.surface, borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: `1px solid ${theme.border}`, overflow: 'hidden' },
     historyItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1rem' },
     historyCode: { fontFamily: "'DM Sans', sans-serif", fontWeight: '700', fontSize: '1rem', letterSpacing: '0.1rem', color: theme.textPrimary },
@@ -918,6 +939,19 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
 
                 {myHistory.length > 0 && (
                   <>
+                    <div style={styles.historyTopRow}>
+                      <p style={styles.historyTitle}>My Code History</p>
+                      <button
+                        style={styles.clearHistoryBtn}
+                        onClick={() => setConfirmModal({
+                          title: 'Clear History',
+                          message: 'This will permanently delete all your access codes, including any active code. This cannot be undone.',
+                          onConfirm: clearMyHistory,
+                        })}
+                      >
+                        Clear History
+                      </button>
+                    </div>
                     <div style={styles.historyCard}>
                       {paginate(myHistory, myHistoryPage).map((code, index, arr) => {
                         const status = getCodeStatus(code)
