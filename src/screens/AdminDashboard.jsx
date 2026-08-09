@@ -648,7 +648,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   // to actually step through between tabs.
   const goToTab = (tabId) => {
     setSidebarOpen(false)
-    navigate(tabId === 'overview' ? '/admin' : `/admin/${tabId}`)
+    navigate(tabId === 'overview' ? '/admin' : `/admin/${tabId}`, { replace: true })
   }
 
   // Mirrors the reset navigateTo() used to do inline, now driven by the
