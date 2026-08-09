@@ -1,12 +1,15 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from '../components/PeekPasswordInput'
 
 import { formatNigerianPhone, validateEmail, validatePhone, validatePassword } from '../utils/helpers'
 
-export default function Register({ onBackToLogin }) {
+export default function Register() {
   const { theme } = useTheme()
+  const navigate = useNavigate()
+  const onBackToLogin = () => navigate('/login')
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)

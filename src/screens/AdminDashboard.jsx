@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { capitalizeName, formatDate, getCodeStatus, generateCode, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
@@ -11,35 +12,31 @@ import Badge from '../components/Badge'
 import AvatarMenu from '../components/AvatarMenu'
 import NotificationBell from '../components/NotificationBell'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
-import Settings from './Settings'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
-export default function AdminDashboard({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
+// Tabs addressable via /admin/:tab — used to validate the URL param so an
+// unrecognized/stale tab segment falls back to Overview instead of
+// rendering a blank tab body.
+const TAB_IDS = ['overview', 'approvals', 'mycode', 'users', 'createUser', 'codes', 'history']
+
+export default function AdminDashboard({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
-  const [activeTab, setActiveTab] = useState('overview')
+  const navigate = useNavigate()
+  const { tab: tabParam, userId } = useParams()
+  const activeTab = TAB_IDS.includes(tabParam) ? tabParam : 'overview'
   const [pendingUsers, setPendingUsers] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [codes, setCodes] = useState([])
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [sortBy, setSortBy] = useState('joined')
   const [confirmModal, setConfirmModal] = useState(null)
-
-  useEffect(() => {
-    if (openSettingsSignal) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowSettings(true)
-      setFocusPasswordSection(true)
-    }
-  }, [openSettingsSignal])
   const [page, setPage] = useState(1)
-  const [selectedResident, setSelectedResident] = useState(null)
+  const [residentDetail, setResidentDetail] = useState(null)
   const [residentCodes, setResidentCodes] = useState([])
   const [analytics, setAnalytics] = useState({
     today: 0, thisWeek: 0, total: 0, used: 0, active: 0, expired: 0, revoked: 0
@@ -289,16 +286,34 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     })
   }, [])
 
-  const fetchResidentCodes = async (resident) => {
-    setSelectedResident(resident)
+  // Driven by the /admin/users/:userId route param rather than an
+  // imperative call, so navigating here directly (a deep link, or the
+  // browser/hardware back button restoring this URL) fetches fresh instead
+  // of depending on the list view's already-fetched data being in memory.
+  useEffect(() => {
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResidentDetail(null)
+      setResidentCodes([])
+      return
+    }
     setResidentCodesPage(1)
-    const { data } = await supabase
+    let cancelled = false
+
+    supabase.from('users').select('id, full_name').eq('id', userId).single().then(({ data }) => {
+      if (!cancelled) setResidentDetail(data || null)
+    })
+    supabase
       .from('delivery_codes')
       .select('*')
-      .eq('resident_id', resident.id)
+      .eq('resident_id', userId)
       .order('created_at', { ascending: false })
-    setResidentCodes(data || [])
-  }
+      .then(({ data }) => {
+        if (!cancelled) setResidentCodes(data || [])
+      })
+
+    return () => { cancelled = true }
+  }, [userId])
 
   const approveUser = async (user) => {
     await supabase.from('users').update({ status: 'approved' }).eq('id', user.id)
@@ -628,35 +643,39 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
     confirmNotice: { fontSize: '0.82rem', color: theme.textSecondary, margin: 0, fontWeight: '500', lineHeight: '1.5' },
   }
 
-  const navigateTo = (tabId) => {
-    setActiveTab(tabId)
+  // Sidebar tab clicks navigate to a real URL instead of just flipping local
+  // state — this is what gives the browser/hardware back button something
+  // to actually step through between tabs.
+  const goToTab = (tabId) => {
     setSidebarOpen(false)
+    navigate(tabId === 'overview' ? '/admin' : `/admin/${tabId}`)
+  }
+
+  // Mirrors the reset navigateTo() used to do inline, now driven by the
+  // URL-derived activeTab changing rather than a manual call at click time.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchQuery('')
     setRoleFilter('all')
     setSortBy('joined')
-    setSelectedResident(null)
     setCreatedCreds(null)
     setCreateError(null)
     setPage(1)
     setMyHistoryPage(1)
-  }
+  }, [activeTab])
 
-  if (showSettings) {
-    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
-  }
-
-  if (selectedResident) {
+  if (userId) {
     return (
       <div style={styles.container}>
         <style>{responsiveTableCSS}</style>
         <div style={{ ...styles.header, zIndex: 150 }}>
-          <button style={styles.backBtn} onClick={() => setSelectedResident(null)}>← Back</button>
-          <p style={styles.headerTitleCenter} title={capitalizeName(selectedResident.full_name)}>{capitalizeName(selectedResident.full_name)}</p>
+          <button style={styles.backBtn} onClick={() => navigate(-1)}>← Back</button>
+          <p style={styles.headerTitleCenter} title={capitalizeName(residentDetail?.full_name)}>{capitalizeName(residentDetail?.full_name)}</p>
           <div style={{ width: '60px' }} />
         </div>
 
         {showPasswordReminder && (
-          <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+          <PasswordReminderBanner onChangePassword={() => navigate('/admin/settings?focus=password')} onSnooze={onSnoozeReminder} />
         )}
 
         <div style={styles.body}>
@@ -737,7 +756,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                 color: activeTab === tab.id ? theme.primary : theme.textSecondary,
                 fontWeight: activeTab === tab.id ? '700' : '500',
               }}
-              onClick={() => navigateTo(tab.id)}
+              onClick={() => goToTab(tab.id)}
             >
               <span>{tab.label}</span>
               {tab.badge > 0 && <span style={styles.sidebarBadge}>{tab.badge}</span>}
@@ -765,13 +784,13 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
           <NotificationBell userId={profile.id} />
           <AvatarMenu
             name={capitalizeName(profile.full_name)}
-            onSettingsClick={() => setShowSettings(true)}
+            onSettingsClick={() => navigate('/admin/settings')}
           />
         </div>
       </div>
 
       {showPasswordReminder && (
-        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+        <PasswordReminderBanner onChangePassword={() => navigate('/admin/settings?focus=password')} onSnooze={onSnoozeReminder} />
       )}
 
       <div style={styles.body}>
@@ -814,7 +833,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                 </div>
 
                 {pendingUsers.length > 0 && (
-                  <button style={styles.banner} onClick={() => navigateTo('approvals')}>
+                  <button style={styles.banner} onClick={() => goToTab('approvals')}>
                     <span>{pendingUsers.length} pending approval{pendingUsers.length === 1 ? '' : 's'} waiting for review</span>
                     <span>→</span>
                   </button>
@@ -1045,7 +1064,7 @@ export default function AdminDashboard({ profile, openSettingsSignal, onPassword
                               <div style={{ minWidth: 0 }}>
                                 <button
                                   style={{ ...styles.nameLink, ...styles.truncate, maxWidth: '100%' }}
-                                  onClick={() => fetchResidentCodes(user)}
+                                  onClick={() => { setResidentDetail(user); navigate(`/admin/users/${user.id}`) }}
                                   title={capitalizeName(user.full_name)}
                                 >
                                   {capitalizeName(user.full_name)}

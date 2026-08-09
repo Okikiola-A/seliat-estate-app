@@ -1,9 +1,12 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 
-export default function ForgotPassword({ onBackToLogin }) {
+export default function ForgotPassword() {
   const { theme } = useTheme()
+  const navigate = useNavigate()
+  const onBackToLogin = () => navigate('/login')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)

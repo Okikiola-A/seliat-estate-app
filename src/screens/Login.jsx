@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
-import Register from './Register'
-import ForgotPassword from './ForgotPassword'
 import PeekPasswordInput from '../components/PeekPasswordInput'
 
 export default function Login() {
   const { theme } = useTheme()
+  const navigate = useNavigate()
   const [email, setEmail] = useState(() => localStorage.getItem('seliat-remember-email') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -14,36 +14,8 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [shakeFields, setShakeFields] = useState(false)
-  const [showRegister, setShowRegister] = useState(false)
-  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const passwordRef = useRef(null)
-
-  const restoreRememberedEmail = () => {
-    const savedEmail = localStorage.getItem('seliat-remember-email')
-    if (savedEmail) {
-      setEmail(savedEmail)
-      setRememberMe(true)
-    } else {
-      setEmail('')
-      setRememberMe(false)
-    }
-  }
-
-  // Login never unmounts while navigating to/from Register or Forgot Password
-  // (they're just swapped in via conditional return), so its own state would
-  // otherwise sit stale in memory. Reset it fresh every time we come back.
-  const returnToLogin = () => {
-    setShowRegister(false)
-    setShowForgotPassword(false)
-    setPassword('')
-    setError(null)
-    setShakeFields(false)
-    restoreRememberedEmail()
-  }
-
-  if (showRegister) return <Register onBackToLogin={returnToLogin} />
-  if (showForgotPassword) return <ForgotPassword onBackToLogin={returnToLogin} />
 
   const handleLogin = async () => {
     if (!email || !password) return
@@ -388,7 +360,7 @@ export default function Login() {
             </label>
             <button
               style={styles.forgotBtn}
-              onClick={() => setShowForgotPassword(true)}
+              onClick={() => navigate('/forgot-password')}
               type="button"
             >
               Forgot password?
@@ -414,7 +386,7 @@ export default function Login() {
           Don't have an account?{' '}
           <button
             style={styles.registerLink}
-            onClick={() => setShowRegister(true)}
+            onClick={() => navigate('/register')}
             type="button"
           >
             Sign up

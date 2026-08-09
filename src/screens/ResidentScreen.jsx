@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import NotificationBell from '../components/NotificationBell'
@@ -8,32 +9,22 @@ import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
 import { paginate } from '../utils/pagination'
-import Settings from './Settings'
 
 import { generateCode, formatDate, getCodeStatus, capitalizeName, shareAccessCode } from '../utils/helpers'
 
-export default function ResidentScreen({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
+export default function ResidentScreen({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
+  const navigate = useNavigate()
   const [activeCode, setActiveCode] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [page, setPage] = useState(1)
   const [codeSettings, setCodeSettings] = useState({ default_expiry_hours: 12, max_expiry_hours: 12 })
   const [durationHours, setDurationHours] = useState(12)
-
-  useEffect(() => {
-    if (openSettingsSignal) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowSettings(true)
-      setFocusPasswordSection(true)
-    }
-  }, [openSettingsSignal])
   const [revoking, setRevoking] = useState(false)
 
   const fetchCodes = async () => {
@@ -153,10 +144,6 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
     navigator.clipboard.writeText(code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  if (showSettings) {
-    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
   }
 
   const styles = {
@@ -485,13 +472,13 @@ export default function ResidentScreen({ profile, openSettingsSignal, onPassword
           <AvatarMenu
             name={capitalizeName(profile.full_name)}
             subtitle={`${profile.block_number}, House ${profile.house_number}`}
-            onSettingsClick={() => setShowSettings(true)}
+            onSettingsClick={() => navigate('/resident/settings')}
           />
         </div>
       </div>
 
       {showPasswordReminder && (
-        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+        <PasswordReminderBanner onChangePassword={() => navigate('/resident/settings?focus=password')} onSnooze={onSnoozeReminder} />
       )}
 
       <div style={styles.body}>

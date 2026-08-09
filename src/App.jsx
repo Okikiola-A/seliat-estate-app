@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './supabase'
 import { useTheme } from './context/useTheme'
 import { useIdleSignOut } from './hooks/useIdleSignOut'
 import { useSessionExpiry, clearSessionExpiry } from './hooks/useSessionExpiry'
 import Login from './screens/Login'
+import Register from './screens/Register'
+import ForgotPassword from './screens/ForgotPassword'
 import GuardScreen from './screens/GuardScreen'
 import ResidentScreen from './screens/ResidentScreen'
 import AdminDashboard from './screens/AdminDashboard'
 import ResetPassword from './screens/ResetPassword'
 import AccountStatus from './screens/AccountStatus'
+import Settings from './screens/Settings'
 
 export default function App() {
   const { applyUserTheme } = useTheme()
@@ -19,7 +23,6 @@ export default function App() {
   const [accountStatus, setAccountStatus] = useState(null)
   const [loginNonce, setLoginNonce] = useState(0)
   const [passwordReminderSnoozed, setPasswordReminderSnoozed] = useState(false)
-  const [settingsJumpSignal, setSettingsJumpSignal] = useState(0)
 
   useIdleSignOut(!!session && !!userProfile)
   useSessionExpiry(userProfile?.role, loginNonce)
@@ -100,7 +103,6 @@ export default function App() {
         setUserProfile(null)
         setAccountStatus(null)
         setLoading(false)
-        setSettingsJumpSignal(0)
         setPasswordReminderSnoozed(false)
       }
     })
@@ -128,7 +130,16 @@ export default function App() {
     )
   }
 
-  if (!session) return <Login />
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
 
   if (accountStatus) {
     return (
@@ -151,8 +162,6 @@ export default function App() {
     )
   }
 
-  const openSettings = () => setSettingsJumpSignal(n => n + 1)
-
   const onPasswordChanged = () => {
     setUserProfile(prev => ({ ...prev, force_password_change: false }))
   }
@@ -161,13 +170,33 @@ export default function App() {
   const onSnoozeReminder = () => setPasswordReminderSnoozed(true)
 
   if (userProfile.role === 'guard') {
-    return <GuardScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
+    return (
+      <Routes>
+        <Route path="/guard" element={<GuardScreen profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="/guard/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
+        <Route path="*" element={<Navigate to="/guard" replace />} />
+      </Routes>
+    )
   }
   if (userProfile.role === 'resident') {
-    return <ResidentScreen profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
+    return (
+      <Routes>
+        <Route path="/resident" element={<ResidentScreen profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="/resident/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
+        <Route path="*" element={<Navigate to="/resident" replace />} />
+      </Routes>
+    )
   }
   if (userProfile.role === 'admin') {
-    return <AdminDashboard profile={userProfile} openSettingsSignal={settingsJumpSignal} onPasswordChanged={onPasswordChanged} showPasswordReminder={showPasswordReminder} onChangePasswordReminder={openSettings} onSnoozeReminder={onSnoozeReminder} />
+    return (
+      <Routes>
+        <Route path="/admin" element={<AdminDashboard profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="/admin/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
+        <Route path="/admin/users/:userId" element={<AdminDashboard profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="/admin/:tab" element={<AdminDashboard profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    )
   }
 
   // Admin and supervisor placeholder for now

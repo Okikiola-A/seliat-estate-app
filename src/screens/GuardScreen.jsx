@@ -1,27 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { capitalizeName } from '../utils/helpers'
 import AvatarMenu from '../components/AvatarMenu'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
-import Settings from './Settings'
 
-export default function GuardScreen({ profile, openSettingsSignal, onPasswordChanged, showPasswordReminder, onChangePasswordReminder, onSnoozeReminder }) {
+export default function GuardScreen({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
+  const navigate = useNavigate()
   const [code, setCode] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [focusPasswordSection, setFocusPasswordSection] = useState(false)
   const inputRef = useRef(null)
-
-  useEffect(() => {
-    if (openSettingsSignal) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowSettings(true)
-      setFocusPasswordSection(true)
-    }
-  }, [openSettingsSignal])
 
   const handleChange = (e) => {
     const val = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6)
@@ -94,10 +85,6 @@ export default function GuardScreen({ profile, openSettingsSignal, onPasswordCha
     setCode('')
     setResult(null)
     setTimeout(() => inputRef.current?.focus(), 100)
-  }
-
-  if (showSettings) {
-    return <Settings profile={profile} onBack={() => { setShowSettings(false); setFocusPasswordSection(false) }} onPasswordChanged={onPasswordChanged} focusPasswordSection={focusPasswordSection} />
   }
 
   const styles = {
@@ -282,12 +269,12 @@ export default function GuardScreen({ profile, openSettingsSignal, onPasswordCha
         <p style={styles.headerName} title={capitalizeName(profile.full_name)}>{capitalizeName(profile.full_name)}</p>
         <AvatarMenu
           name={capitalizeName(profile.full_name)}
-          onSettingsClick={() => setShowSettings(true)}
+          onSettingsClick={() => navigate('/guard/settings')}
         />
       </div>
 
       {showPasswordReminder && (
-        <PasswordReminderBanner onChangePassword={onChangePasswordReminder} onSnooze={onSnoozeReminder} />
+        <PasswordReminderBanner onChangePassword={() => navigate('/guard/settings?focus=password')} onSnooze={onSnoozeReminder} />
       )}
 
       <div style={styles.body}>

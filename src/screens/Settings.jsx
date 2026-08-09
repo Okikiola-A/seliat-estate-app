@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { formatNigerianPhone, validatePhone, validatePassword } from '../utils/helpers'
@@ -29,8 +30,12 @@ const getSupportMailto = (profile) => {
   return `mailto:${SUPPORT_EMAIL}?${params.toString()}`
 }
 
-export default function Settings({ profile, onBack, onPasswordChanged, focusPasswordSection = false }) {
+export default function Settings({ profile, onPasswordChanged }) {
   const { theme, isDark, toggleTheme } = useTheme()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const onBack = () => navigate(-1)
+  const focusPasswordSection = searchParams.get('focus') === 'password'
   const isResident = profile.role === 'resident'
   const isAdmin = profile.role === 'admin'
 
