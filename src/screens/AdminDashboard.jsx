@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import { capitalizeName, formatDate, getCodeStatus, generateCode, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
@@ -12,6 +12,7 @@ import Badge from '../components/Badge'
 import AvatarMenu from '../components/AvatarMenu'
 import NotificationBell from '../components/NotificationBell'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
+import { useTabDepth } from '../hooks/useTabDepth'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
@@ -23,14 +24,9 @@ const TAB_IDS = ['overview', 'approvals', 'mycode', 'users', 'createUser', 'code
 export default function AdminDashboard({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
   const navigate = useNavigate()
-  const location = useLocation()
+  const { goToTab: goToTabPath } = useTabDepth()
   const { tab: tabParam, userId } = useParams()
   const activeTab = TAB_IDS.includes(tabParam) ? tabParam : 'overview'
-  // How many tab-to-tab hops deep the current history entry is from the
-  // base /admin (Overview) entry — carried per-entry via navigate's `state`
-  // option, not component state, so it survives back/forward navigation
-  // correctly (each history entry remembers its own depth).
-  const adminDepth = location.state?.adminDepth || 0
   const [pendingUsers, setPendingUsers] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [codes, setCodes] = useState([])
@@ -654,19 +650,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   // to actually step through between tabs.
   const goToTab = (tabId) => {
     setSidebarOpen(false)
-
-    if (tabId === 'overview') {
-      // Jumping to Overview isn't a lateral move like other tabs — it's
-      // "go home". Rather than pushing yet another entry on top of however
-      // many tabs were visited to get here, pop back through all of them
-      // in one go, landing on the original base /admin entry. That's what
-      // makes a single back gesture from Overview always exit the app,
-      // regardless of how many tabs were hopped through beforehand.
-      if (adminDepth > 0) navigate(-adminDepth)
-      return
-    }
-
-    navigate(`/admin/${tabId}`, { state: { adminDepth: adminDepth + 1 } })
+    goToTabPath(tabId === 'overview' ? '/admin' : `/admin/${tabId}`, { isHome: tabId === 'overview' })
   }
 
   // Mirrors the reset navigateTo() used to do inline, now driven by the
