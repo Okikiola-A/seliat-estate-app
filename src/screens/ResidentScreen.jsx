@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
 import NotificationBell from '../components/NotificationBell'
 import AvatarMenu from '../components/AvatarMenu'
@@ -8,136 +7,38 @@ import PasswordReminderBanner from '../components/PasswordReminderBanner'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
+import FormError from '../components/FormError'
 import { paginate } from '../utils/pagination'
+import { useOwnAccessCode } from '../hooks/useOwnAccessCode'
 
-import { generateCode, formatDate, getCodeStatus, capitalizeName, shareAccessCode } from '../utils/helpers'
+import { formatDate, getCodeStatus, capitalizeName, shareAccessCode } from '../utils/helpers'
 
 export default function ResidentScreen({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
   const navigate = useNavigate()
-  const [activeCode, setActiveCode] = useState(null)
-  const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState(null)
+  const {
+    activeCode, history, loading, generating, revoking, error,
+    codeSettings, durationHours, setDurationHours,
+    generate, revoke, clearHistory,
+  } = useOwnAccessCode(profile.id)
   const [copied, setCopied] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [page, setPage] = useState(1)
-  const [codeSettings, setCodeSettings] = useState({ default_expiry_hours: 12, max_expiry_hours: 12 })
-  const [durationHours, setDurationHours] = useState(12)
-  const [revoking, setRevoking] = useState(false)
-
-  const fetchCodes = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('delivery_codes')
-      .select('id, code, created_at, used, used_at, revoked, expires_at')
-      .eq('resident_id', profile.id)
-      .order('created_at', { ascending: false })
-
-    if (data) {
-      const now = new Date()
-      const active = data.find(c => !c.used && !c.revoked && new Date(c.expires_at) > now)
-      setActiveCode(active || null)
-      setHistory(data)
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    // Standard fetch-on-mount pattern; fetchCodes is redefined every render
-    // (it closes over profile.id), so it's intentionally left out of the
-    // dependency array to avoid refetching on every render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchCodes()
-    supabase.from('app_settings').select('default_expiry_hours, max_expiry_hours').single().then(({ data }) => {
-      if (data) {
-        setCodeSettings(data)
-        setDurationHours(data.default_expiry_hours)
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const requestCode = async () => {
-    setError(null)
-
-    const parsedDuration = Number(durationHours)
-    if (!durationHours || Number.isNaN(parsedDuration) || parsedDuration < 1 || parsedDuration > codeSettings.max_expiry_hours) {
-      setError(`Please enter a duration between 1 and ${codeSettings.max_expiry_hours} hours.`)
-      return
-    }
-
-    setGenerating(true)
-
-    const { data: existing } = await supabase
-      .from('delivery_codes')
-      .select('id')
-      .eq('resident_id', profile.id)
-      .eq('used', false)
-      .eq('revoked', false)
-      .gt('expires_at', new Date().toISOString())
-      .limit(1)
-
-    if (existing && existing.length > 0) {
-      setError('You already have an active code. Use or wait for it to expire first.')
-      setGenerating(false)
-      await fetchCodes()
-      return
-    }
-
-    const newCode = generateCode()
-
-    const { error } = await supabase.rpc('generate_delivery_code', {
-      p_code: newCode,
-      p_duration_hours: parsedDuration,
-    })
-
-    if (error) {
-      console.error('Failed to generate code:', error)
-      setError('Something went wrong. Please try again.')
-      setGenerating(false)
-      return
-    }
-
-    await fetchCodes()
-    setPage(1)
-    setGenerating(false)
+    const ok = await generate()
+    if (ok) setPage(1)
   }
 
-  const clearHistory = async () => {
-    const { error } = await supabase
-      .from('delivery_codes')
-      .delete()
-      .eq('resident_id', profile.id)
-
+  const handleClearHistory = async () => {
     setConfirmModal(null)
-
-    if (error) {
-      console.error('Failed to clear history:', error)
-      alert('Could not clear history. Please try again.')
-      return
-    }
-
-    setPage(1)
-    fetchCodes()
+    const ok = await clearHistory()
+    if (ok) setPage(1)
   }
 
   const revokeOwnCode = async (code) => {
     setConfirmModal(null)
-    setRevoking(true)
-
-    const { error } = await supabase.rpc('revoke_own_code', { target_code_id: code.id })
-
-    if (error) {
-      console.error('Failed to revoke code:', error)
-      alert('Could not revoke this code. Please try again.')
-      setRevoking(false)
-      return
-    }
-
-    await fetchCodes()
-    setRevoking(false)
+    await revoke(code)
   }
 
   const copyCode = (code) => {
@@ -368,21 +269,6 @@ export default function ResidentScreen({ profile, showPasswordReminder, onSnooze
       display: 'inline-block',
       animation: 'spin 0.7s linear infinite',
     },
-    errorBox: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-      padding: '0.6rem 0.75rem',
-      borderRadius: '6px',
-      backgroundColor: theme.dangerBg,
-      border: `1px solid ${theme.dangerBorder}`,
-    },
-    errorText: {
-      color: theme.danger,
-      fontSize: '0.82rem',
-      margin: 0,
-      fontWeight: '500',
-    },
     historySection: {
       display: 'flex',
       flexDirection: 'column',
@@ -454,8 +340,6 @@ export default function ResidentScreen({ profile, showPasswordReminder, onSnooze
 
   return (
     <div style={styles.container}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
       {confirmModal && (
         <ConfirmModal
           title={confirmModal.title}
@@ -571,16 +455,7 @@ export default function ResidentScreen({ profile, showPasswordReminder, onSnooze
               <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
             </div>
 
-            {error && (
-              <div style={styles.errorBox}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill={theme.danger}>
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-                </svg>
-                <p style={styles.errorText}>{error}</p>
-              </div>
-            )}
+            <FormError message={error} />
 
             <button
               style={{ ...styles.generateBtn, opacity: generating ? 0.7 : 1 }}
@@ -606,7 +481,7 @@ export default function ResidentScreen({ profile, showPasswordReminder, onSnooze
                 onClick={() => setConfirmModal({
                   title: 'Clear History',
                   message: 'This will permanently delete all your access codes, including any active code. This cannot be undone.',
-                  onConfirm: clearHistory,
+                  onConfirm: handleClearHistory,
                 })}
               >
                 Clear History

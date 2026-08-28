@@ -67,6 +67,16 @@ export const capitalizeName = (name) => {
     .join(' ')
 }
 
+// A resident (or an admin using their own code) can have at most one
+// currently-usable code at a time — the rest are history. Used wherever a
+// list of a person's codes needs to be split into "the one active code" vs
+// "everything else" (ResidentScreen and AdminDashboard's own-code tab both
+// need exactly this).
+export const findActiveCode = (codes) => {
+  const now = new Date()
+  return codes.find(c => !c.used && !c.revoked && new Date(c.expires_at) > now) || null
+}
+
 export const getCodeStatus = (code) => {
   if (code.revoked) return { label: 'Revoked', color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' }
   if (code.used) return { label: 'Used', color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' }

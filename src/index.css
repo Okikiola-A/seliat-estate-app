@@ -146,6 +146,13 @@ code,
   color: var(--text-h);
 }
 
+/* Shared by every inline loading spinner (Login, Register-adjacent auth
+   screens, GuardScreen, ResidentScreen, AdminDashboard, Settings) — kept
+   here once instead of redeclared in each screen's own <style> tag. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 code {
   font-size: 15px;
   line-height: 135%;

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useTheme } from '../context/useTheme'
+import FormError from '../components/FormError'
 
 export default function ForgotPassword() {
   const { theme } = useTheme()
@@ -130,21 +131,6 @@ export default function ForgotPassword() {
       boxSizing: 'border-box',
       transition: 'border-color 0.15s',
     },
-    errorBox: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-      padding: '0.6rem 0.75rem',
-      borderRadius: '6px',
-      backgroundColor: theme.dangerBg,
-      border: `1px solid ${theme.dangerBorder}`,
-    },
-    errorText: {
-      color: theme.danger,
-      fontSize: '0.82rem',
-      margin: 0,
-      fontWeight: '500',
-    },
     submitBtn: {
       backgroundColor: theme.primary,
       color: theme.primaryText,
@@ -260,16 +246,7 @@ export default function ForgotPassword() {
           </div>
         </div>
 
-        {error && (
-          <div style={styles.errorBox}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill={theme.danger}>
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="12" y1="16" x2="12.01" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-            </svg>
-            <p style={styles.errorText}>{error}</p>
-          </div>
-        )}
+        <FormError message={error} />
 
         <button
           style={{ ...styles.submitBtn, opacity: loading ? 0.7 : 1 }}

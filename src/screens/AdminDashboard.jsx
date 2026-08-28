@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
-import { capitalizeName, formatDate, getCodeStatus, generateCode, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
+import { capitalizeName, formatDate, getCodeStatus, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
 import { responsiveTableCSS } from '../utils/responsiveTableStyles'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
@@ -12,7 +12,9 @@ import Badge from '../components/Badge'
 import AvatarMenu from '../components/AvatarMenu'
 import NotificationBell from '../components/NotificationBell'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
+import FormError from '../components/FormError'
 import { useTabDepth } from '../hooks/useTabDepth'
+import { useOwnAccessCode } from '../hooks/useOwnAccessCode'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
@@ -44,16 +46,25 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     today: 0, thisWeek: 0, total: 0, used: 0, active: 0, expired: 0, revoked: 0
   })
 
-  const [myActiveCode, setMyActiveCode] = useState(null)
-  const [myHistory, setMyHistory] = useState([])
-  const [myGenerating, setMyGenerating] = useState(false)
-  const [myError, setMyError] = useState(null)
+  // The admin's own delivery code — same shared hook ResidentScreen uses,
+  // so the generate/revoke/clear-history logic (and any future fix to it)
+  // lives in exactly one place instead of two hand-kept-in-sync copies.
+  const {
+    activeCode: myActiveCode,
+    history: myHistory,
+    generating: myGenerating,
+    revoking: myRevoking,
+    error: myError,
+    codeSettings,
+    durationHours,
+    setDurationHours,
+    generate: generateMyCode,
+    revoke: revokeMyCodeAction,
+    clearHistory: clearMyHistoryAction,
+  } = useOwnAccessCode(profile.id)
   const [myCopied, setMyCopied] = useState(false)
   const [myHistoryPage, setMyHistoryPage] = useState(1)
   const [residentCodesPage, setResidentCodesPage] = useState(1)
-  const [myRevoking, setMyRevoking] = useState(false)
-  const [codeSettings, setCodeSettings] = useState({ default_expiry_hours: 12, max_expiry_hours: 12 })
-  const [durationHours, setDurationHours] = useState(12)
 
   const [createForm, setCreateForm] = useState({
     full_name: '', email: '', phone: '', role: 'resident', block_number: '', house_number: '',
@@ -138,81 +149,19 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     setHistory(data || [])
   }
 
-  const fetchMyCode = async () => {
-    const { data } = await supabase
-      .from('delivery_codes')
-      .select('id, code, created_at, used, used_at, revoked, expires_at')
-      .eq('resident_id', profile.id)
-      .order('created_at', { ascending: false })
-
-    if (data) {
-      const now = new Date()
-      const active = data.find(c => !c.used && !c.revoked && new Date(c.expires_at) > now)
-      setMyActiveCode(active || null)
-      setMyHistory(data)
-    }
+  // Thin wrappers composing the shared hook's actions with this screen's
+  // own local UI state (pagination, the confirm modal) — the hook itself
+  // has no opinion on either, since AdminDashboard and ResidentScreen each
+  // manage those independently.
+  const handleGenerateMyCode = async () => {
+    const ok = await generateMyCode()
+    if (ok) setMyHistoryPage(1)
   }
 
-  const clearMyHistory = async () => {
-    const { error } = await supabase
-      .from('delivery_codes')
-      .delete()
-      .eq('resident_id', profile.id)
-
+  const handleClearMyHistory = async () => {
     setConfirmModal(null)
-
-    if (error) {
-      console.error('Failed to clear history:', error)
-      alert('Could not clear history. Please try again.')
-      return
-    }
-
-    setMyHistoryPage(1)
-    fetchMyCode()
-  }
-
-  const generateMyCode = async () => {
-    setMyError(null)
-
-    const parsedDuration = Number(durationHours)
-    if (!durationHours || Number.isNaN(parsedDuration) || parsedDuration < 1 || parsedDuration > codeSettings.max_expiry_hours) {
-      setMyError(`Please enter a duration between 1 and ${codeSettings.max_expiry_hours} hours.`)
-      return
-    }
-
-    setMyGenerating(true)
-
-    const { data: existing } = await supabase
-      .from('delivery_codes')
-      .select('id')
-      .eq('resident_id', profile.id)
-      .eq('used', false)
-      .eq('revoked', false)
-      .gt('expires_at', new Date().toISOString())
-      .limit(1)
-
-    if (existing && existing.length > 0) {
-      setMyError('You already have an active code. Use or wait for it to expire first.')
-      setMyGenerating(false)
-      await fetchMyCode()
-      return
-    }
-
-    const newCode = generateCode()
-
-    const { error } = await supabase.rpc('generate_delivery_code', {
-      p_code: newCode,
-      p_duration_hours: parsedDuration,
-    })
-
-    if (error) {
-      console.error('Failed to generate code:', error)
-      setMyError('Something went wrong. Please try again.')
-      setMyGenerating(false)
-      return
-    }
-    await fetchMyCode()
-    setMyGenerating(false)
+    const ok = await clearMyHistoryAction()
+    if (ok) setMyHistoryPage(1)
   }
 
   const copyMyCode = (code) => {
@@ -223,19 +172,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
 
   const revokeMyCode = async (code) => {
     setConfirmModal(null)
-    setMyRevoking(true)
-
-    const { error } = await supabase.rpc('revoke_own_code', { target_code_id: code.id })
-
-    if (error) {
-      console.error('Failed to revoke code:', error)
-      alert('Could not revoke this code. Please try again.')
-      setMyRevoking(false)
-      return
-    }
-
-    await fetchMyCode()
-    setMyRevoking(false)
+    await revokeMyCodeAction(code)
   }
 
   const fetchAnalytics = async () => {
@@ -265,7 +202,9 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     if (activeTab === 'users') await fetchAllUsers()
     if (activeTab === 'codes') await fetchCodes()
     if (activeTab === 'history') await fetchHistory()
-    if (activeTab === 'mycode') await fetchMyCode()
+    // 'mycode' is intentionally absent here — useOwnAccessCode fetches its
+    // own data independently on mount rather than being driven by tab
+    // switches, so there's nothing for this shared loader to do for it.
     setLoading(false)
   }
 
@@ -278,15 +217,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
-
-  useEffect(() => {
-    supabase.from('app_settings').select('default_expiry_hours, max_expiry_hours').single().then(({ data }) => {
-      if (data) {
-        setCodeSettings(data)
-        setDurationHours(data.default_expiry_hours)
-      }
-    })
-  }, [])
 
   // Driven by the /admin/users/:userId route param rather than an
   // imperative call, so navigating here directly (a deep link, or the
@@ -636,8 +566,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     fieldLabel: { fontSize: '0.82rem', fontWeight: '600', color: theme.textSecondary },
     fieldInput: { width: '100%', padding: '0.8rem 1rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', color: theme.textPrimary, backgroundColor: theme.surface, fontFamily: "'DM Sans', sans-serif", fontWeight: '500', boxSizing: 'border-box' },
     fieldSelect: { width: '100%', padding: '0.8rem 1rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', color: theme.textPrimary, fontFamily: "'DM Sans', sans-serif", fontWeight: '500', boxSizing: 'border-box', backgroundColor: theme.surface, cursor: 'pointer' },
-    errorBox: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.75rem', borderRadius: '6px', backgroundColor: theme.dangerBg, border: `1px solid ${theme.dangerBorder}` },
-    errorText: { color: theme.danger, fontSize: '0.82rem', margin: 0, fontWeight: '500' },
     credsBox: { backgroundColor: theme.surfaceAlt, border: `1.5px dashed ${theme.border}`, borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
     credsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' },
     credsKey: { fontSize: '0.75rem', fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
@@ -723,7 +651,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
         * { box-sizing: border-box; }
         input:focus, select:focus { outline: none; }
         input::placeholder { color: ${theme.textMuted}; }
-        @keyframes spin { to { transform: rotate(360deg); } }
         ${responsiveTableCSS}
       `}</style>
 
@@ -948,10 +875,10 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                       />
                       <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
                     </div>
-                    {myError && <p style={{ color: theme.danger, fontSize: '0.85rem' }}>{myError}</p>}
+                    <FormError message={myError} />
                     <button
                       style={{ ...styles.generateBtn, opacity: myGenerating ? 0.7 : 1 }}
-                      onClick={generateMyCode}
+                      onClick={handleGenerateMyCode}
                       disabled={myGenerating}
                     >
                       {myGenerating ? 'Generating...' : 'Generate Access Code'}
@@ -968,7 +895,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                         onClick={() => setConfirmModal({
                           title: 'Clear History',
                           message: 'This will permanently delete all your access codes, including any active code. This cannot be undone.',
-                          onConfirm: clearMyHistory,
+                          onConfirm: handleClearMyHistory,
                         })}
                       >
                         Clear History
@@ -1219,11 +1146,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                       </>
                     )}
 
-                    {createError && (
-                      <div style={styles.errorBox}>
-                        <p style={styles.errorText}>{createError}</p>
-                      </div>
-                    )}
+                    <FormError message={createError} />
 
                     <button
                       style={{ ...styles.generateBtn, opacity: creating ? 0.7 : 1 }}
