@@ -20,6 +20,15 @@ export function useOwnAccessCode(profileId) {
   const [activeCode, setActiveCode] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+  // True only until the very first fetch resolves, then stays true forever
+  // after. Kept separate from `loading` (which flips back to true on every
+  // refetch, including the ones that follow a generate/revoke/clear
+  // action) specifically so a screen can show a "no data yet" placeholder
+  // on first load, without also blanking out and redrawing the whole card
+  // on every subsequent action-triggered refetch — that flash was visible
+  // and reported as feeling unpolished, even though the refetch itself is
+  // still necessary to pick up the change.
+  const [initialized, setInitialized] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [error, setError] = useState(null)
@@ -39,6 +48,7 @@ export function useOwnAccessCode(profileId) {
       setHistory(data)
     }
     setLoading(false)
+    setInitialized(true)
   }, [profileId])
 
   useEffect(() => {
@@ -139,7 +149,7 @@ export function useOwnAccessCode(profileId) {
   return {
     activeCode,
     history,
-    loading,
+    initialLoading: loading && !initialized,
     generating,
     revoking,
     error,

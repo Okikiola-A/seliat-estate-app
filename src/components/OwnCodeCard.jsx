@@ -34,7 +34,7 @@ import FormError from './FormError'
 export default function OwnCodeCard({ profile }) {
   const { theme } = useTheme()
   const {
-    activeCode, history, loading, generating, revoking, error,
+    activeCode, history, initialLoading, generating, revoking, error,
     codeSettings, durationHours, setDurationHours,
     generate, revoke, clearHistory,
   } = useOwnAccessCode(profile.id)
@@ -333,7 +333,7 @@ export default function OwnCodeCard({ profile }) {
 
       <p style={styles.sectionLabel}>My Access Code</p>
 
-      {loading ? (
+      {initialLoading ? (
         <p style={styles.loadingText}>Loading...</p>
       ) : activeCode ? (
         <div style={styles.card}>
