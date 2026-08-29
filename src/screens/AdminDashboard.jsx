@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
-import { capitalizeName, formatDate, getCodeStatus, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone, shareAccessCode } from '../utils/helpers'
+import { capitalizeName, formatDate, getCodeStatus, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone } from '../utils/helpers'
 import { responsiveTableCSS } from '../utils/responsiveTableStyles'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
@@ -14,7 +14,7 @@ import NotificationBell from '../components/NotificationBell'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
 import FormError from '../components/FormError'
 import { useTabDepth } from '../hooks/useTabDepth'
-import { useOwnAccessCode } from '../hooks/useOwnAccessCode'
+import OwnCodeCard from '../components/OwnCodeCard'
 
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
@@ -45,25 +45,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   const [analytics, setAnalytics] = useState({
     today: 0, thisWeek: 0, total: 0, used: 0, active: 0, expired: 0, revoked: 0
   })
-
-  // The admin's own delivery code — same shared hook ResidentScreen uses,
-  // so the generate/revoke/clear-history logic (and any future fix to it)
-  // lives in exactly one place instead of two hand-kept-in-sync copies.
-  const {
-    activeCode: myActiveCode,
-    history: myHistory,
-    generating: myGenerating,
-    revoking: myRevoking,
-    error: myError,
-    codeSettings,
-    durationHours,
-    setDurationHours,
-    generate: generateMyCode,
-    revoke: revokeMyCodeAction,
-    clearHistory: clearMyHistoryAction,
-  } = useOwnAccessCode(profile.id)
-  const [myCopied, setMyCopied] = useState(false)
-  const [myHistoryPage, setMyHistoryPage] = useState(1)
   const [residentCodesPage, setResidentCodesPage] = useState(1)
 
   const [createForm, setCreateForm] = useState({
@@ -147,32 +128,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
       .order('created_at', { ascending: false })
       .limit(100)
     setHistory(data || [])
-  }
-
-  // Thin wrappers composing the shared hook's actions with this screen's
-  // own local UI state (pagination, the confirm modal) — the hook itself
-  // has no opinion on either, since AdminDashboard and ResidentScreen each
-  // manage those independently.
-  const handleGenerateMyCode = async () => {
-    const ok = await generateMyCode()
-    if (ok) setMyHistoryPage(1)
-  }
-
-  const handleClearMyHistory = async () => {
-    setConfirmModal(null)
-    const ok = await clearMyHistoryAction()
-    if (ok) setMyHistoryPage(1)
-  }
-
-  const copyMyCode = (code) => {
-    navigator.clipboard.writeText(code)
-    setMyCopied(true)
-    setTimeout(() => setMyCopied(false), 2000)
-  }
-
-  const revokeMyCode = async (code) => {
-    setConfirmModal(null)
-    await revokeMyCodeAction(code)
   }
 
   const fetchAnalytics = async () => {
@@ -525,25 +480,9 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     cardActions: { display: 'flex', gap: '0.6rem' },
     approveBtn: { flex: 1, padding: '0.65rem', borderRadius: '6px', border: 'none', backgroundColor: theme.primary, color: theme.primaryText, fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" },
     rejectBtn: { flex: 1, padding: '0.65rem', borderRadius: '6px', border: `1.5px solid ${theme.dangerBorder}`, backgroundColor: theme.dangerBg, color: theme.danger, fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" },
-    codeDisplay: { backgroundColor: theme.surfaceAlt, border: `2px dashed ${theme.border}`, borderRadius: '10px', padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
-    codeText: { fontSize: '2.25rem', fontWeight: '800', letterSpacing: '0.4rem', color: theme.textPrimary, fontFamily: "'DM Sans', sans-serif" },
-    expiryText: { fontSize: '0.82rem', fontWeight: '600', color: theme.danger, margin: 0, textAlign: 'center' },
     actionRow: { display: 'flex', gap: '0.75rem' },
     copyBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, backgroundColor: theme.surface, color: theme.textPrimary, fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", textAlign: 'center' },
-    shareBtn: { flex: 1, padding: '0.75rem', borderRadius: '6px', border: 'none', backgroundColor: theme.primary, color: theme.primaryText, fontSize: '0.875rem', fontWeight: '700', cursor: 'pointer', textDecoration: 'none', textAlign: 'center', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' },
-    codeRevokeIconBtn: { position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     generateBtn: { backgroundColor: theme.primary, color: theme.primaryText, border: 'none', borderRadius: '6px', padding: '0.85rem', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", width: '100%' },
-    durationRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' },
-    durationLabel: { fontSize: '0.85rem', fontWeight: '600', color: theme.textSecondary },
-    durationInput: { width: '70px', padding: '0.5rem 0.6rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, fontSize: '0.9rem', fontWeight: '600', color: theme.textPrimary, backgroundColor: theme.surface, fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box' },
-    durationUnit: { fontSize: '0.78rem', color: theme.textMuted, fontWeight: '500' },
-    historyTopRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '0.25rem', paddingRight: '0.25rem' },
-    historyTitle: { fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: theme.textMuted, margin: 0 },
-    clearHistoryBtn: { padding: '0.35rem 0.75rem', borderRadius: '6px', border: `1.5px solid ${theme.dangerBorder}`, backgroundColor: theme.dangerBg, color: theme.danger, fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap' },
-    historyCard: { backgroundColor: theme.surface, borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: `1px solid ${theme.border}`, overflow: 'hidden' },
-    historyItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1rem' },
-    historyCode: { fontFamily: "'DM Sans', sans-serif", fontWeight: '700', fontSize: '1rem', letterSpacing: '0.1rem', color: theme.textPrimary },
-    historyDate: { fontSize: '0.75rem', color: theme.textMuted, margin: '3px 0 0 0', fontWeight: '500' },
     searchWrap: { position: 'relative', flex: 1, display: 'flex', alignItems: 'center' },
     searchIcon: { position: 'absolute', left: '0.75rem', pointerEvents: 'none' },
     searchInput: { width: '100%', padding: '0.65rem 0.75rem 0.65rem 2.25rem', borderRadius: '6px', border: `1.5px solid ${theme.border}`, backgroundColor: theme.surface, fontSize: '0.875rem', color: theme.textPrimary, fontFamily: "'DM Sans', sans-serif", fontWeight: '500', boxSizing: 'border-box' },
@@ -591,7 +530,6 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     setCreatedCreds(null)
     setCreateError(null)
     setPage(1)
-    setMyHistoryPage(1)
   }, [activeTab])
 
   if (userId) {
@@ -806,128 +744,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
             )}
 
             {activeTab === 'mycode' && (
-              <div style={styles.section}>
-                <p style={styles.sectionLabel}>My Access Code</p>
-                {myActiveCode ? (
-                  <div style={styles.card}>
-                    <div style={styles.cardTopRow}>
-                      <p style={styles.cardLabelBlue}>Active Code</p>
-                      <Badge label="Active" variant="active" />
-                    </div>
-                    <div style={styles.codeDisplay}>
-                      <span style={styles.codeText}>{myActiveCode.code}</span>
-                      <button
-                        type="button"
-                        style={{ ...styles.codeRevokeIconBtn, opacity: myRevoking ? 0.5 : 1 }}
-                        disabled={myRevoking}
-                        aria-label="Revoke this code"
-                        title="Revoke this code"
-                        onClick={() => setConfirmModal({
-                          title: 'Revoke This Code',
-                          message: 'This code will stop working immediately. You can generate a new one right after.',
-                          onConfirm: () => revokeMyCode(myActiveCode),
-                        })}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.danger} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                          <path d="M10 11v6M14 11v6"/>
-                          <path d="M9 6V4h6v2"/>
-                        </svg>
-                      </button>
-                    </div>
-                    <p style={styles.expiryText}>
-                      Expires at {new Date(myActiveCode.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                    <div style={styles.actionRow}>
-                      <button style={styles.copyBtn} onClick={() => copyMyCode(myActiveCode.code)}>
-                        {myCopied ? 'Copied!' : 'Copy Code'}
-                      </button>
-                      <button
-                        type="button"
-                        style={styles.shareBtn}
-                        onClick={() => shareAccessCode(myActiveCode.code, myActiveCode.expires_at)}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="18" cy="5" r="3"/>
-                          <circle cx="6" cy="12" r="3"/>
-                          <circle cx="18" cy="19" r="3"/>
-                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                        </svg>
-                        Share Code
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={styles.card}>
-                    <p style={styles.cardLabelBlue}>No Active Code</p>
-                    <p style={styles.cardSub}>Generate a one-time code for your courier.</p>
-                    <div style={styles.durationRow}>
-                      <label style={styles.durationLabel}>Valid for</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={codeSettings.max_expiry_hours}
-                        value={durationHours}
-                        onChange={e => setDurationHours(e.target.value)}
-                        style={styles.durationInput}
-                      />
-                      <span style={styles.durationUnit}>hours (max {codeSettings.max_expiry_hours})</span>
-                    </div>
-                    <FormError message={myError} />
-                    <button
-                      style={{ ...styles.generateBtn, opacity: myGenerating ? 0.7 : 1 }}
-                      onClick={handleGenerateMyCode}
-                      disabled={myGenerating}
-                    >
-                      {myGenerating ? 'Generating...' : 'Generate Access Code'}
-                    </button>
-                  </div>
-                )}
-
-                {myHistory.length > 0 && (
-                  <>
-                    <div style={styles.historyTopRow}>
-                      <p style={styles.historyTitle}>My Code History</p>
-                      <button
-                        style={styles.clearHistoryBtn}
-                        onClick={() => setConfirmModal({
-                          title: 'Clear History',
-                          message: 'This will permanently delete all your access codes, including any active code. This cannot be undone.',
-                          onConfirm: handleClearMyHistory,
-                        })}
-                      >
-                        Clear History
-                      </button>
-                    </div>
-                    <div style={styles.historyCard}>
-                      {paginate(myHistory, myHistoryPage).map((code, index, arr) => {
-                        const status = getCodeStatus(code)
-                        return (
-                          <div
-                            key={code.id}
-                            style={{
-                              ...styles.historyItem,
-                              borderBottom: index < arr.length - 1 ? `1px solid ${theme.border}` : 'none',
-                            }}
-                          >
-                            <div>
-                              <span style={styles.historyCode}>{code.code}</span>
-                              <p style={styles.historyDate}>{formatDate(code.created_at)}</p>
-                              {code.used_at && (
-                                <p style={styles.historyDate}>Used {formatDate(code.used_at)}</p>
-                              )}
-                            </div>
-                            <Badge label={status.label} variant={status.label.toLowerCase()} />
-                          </div>
-                        )
-                      })}
-                    </div>
-                    <Pagination page={myHistoryPage} itemCount={myHistory.length} onPageChange={setMyHistoryPage} />
-                  </>
-                )}
-              </div>
+              <OwnCodeCard profile={profile} />
             )}
 
             {activeTab === 'users' && (
