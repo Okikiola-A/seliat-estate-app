@@ -5,6 +5,7 @@ import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from '../components/PeekPasswordInput'
 import PasswordVisibilityToggle from '../components/PasswordVisibilityToggle'
 import FormError from '../components/FormError'
+import InstallAppBanner from '../components/InstallAppBanner'
 
 export default function Login() {
   const { theme } = useTheme()
@@ -65,6 +66,7 @@ export default function Login() {
       minHeight: '100vh',
       backgroundColor: theme.bg,
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '1.5rem',
@@ -228,6 +230,8 @@ export default function Login() {
         input::placeholder { color: ${theme.textMuted}; }
         input:focus { outline: none; }
       `}</style>
+
+      <InstallAppBanner />
 
       <div style={styles.card}>
         <div style={styles.brandSection}>
