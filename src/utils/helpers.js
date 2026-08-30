@@ -94,12 +94,35 @@ export const getAccessCodeShareMessage = (code, expiresAt) => {
 // WhatsApp specifically. Falls back to a WhatsApp deep link on browsers/
 // devices without navigator.share support (most desktop browsers, some
 // older Android WebViews).
+//
+// Also attaches an actual QR image of the code to the shared message
+// itself wherever the platform supports sharing files — the point is for
+// the courier (who receives this message) to be able to show the QR at
+// the gate for the guard to scan, not for the resident/admin generating
+// the code to see it on their own screen at all.
 export const shareAccessCode = async (code, expiresAt) => {
   const message = getAccessCodeShareMessage(code, expiresAt)
 
+  let qrFile = null
+  try {
+    const { default: QRCode } = await import('qrcode')
+    const dataUrl = await QRCode.toDataURL(code, { width: 480, margin: 2 })
+    const blob = await (await fetch(dataUrl)).blob()
+    qrFile = new File([blob], `seliat-access-code-${code}.png`, { type: 'image/png' })
+  } catch {
+    // QR generation failed for any reason (unsupported environment, etc.)
+    // — not fatal, the share still goes ahead as text-only below since
+    // qrFile is left as null.
+  }
+
   if (navigator.share) {
+    const canShareFile = !!qrFile && navigator.canShare?.({ files: [qrFile] })
     try {
-      await navigator.share({ title: 'Seliat Estate Access Code', text: message })
+      await navigator.share(
+        canShareFile
+          ? { title: 'Seliat Estate Access Code', text: message, files: [qrFile] }
+          : { title: 'Seliat Estate Access Code', text: message }
+      )
       return
     } catch (err) {
       // User cancelled the native share sheet — respect that, don't force
@@ -111,6 +134,8 @@ export const shareAccessCode = async (code, expiresAt) => {
     }
   }
 
+  // wa.me is a plain URL scheme — it can only carry text, never a file
+  // attachment, so this path is always text-only regardless of qrFile.
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
 }
 

@@ -66,11 +66,16 @@ export default function Login() {
       minHeight: '100vh',
       backgroundColor: theme.bg,
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '1.5rem',
       fontFamily: "'DM Sans', sans-serif",
+    },
+    pageWrap: {
+      width: '100%',
+      maxWidth: '400px',
+      display: 'flex',
+      flexDirection: 'column',
     },
     card: {
       width: '100%',
@@ -231,13 +236,14 @@ export default function Login() {
         input:focus { outline: none; }
       `}</style>
 
-      <InstallAppBanner />
+      <div style={styles.pageWrap}>
+        <InstallAppBanner />
 
-      <div style={styles.card}>
-        <div style={styles.brandSection}>
-          <h1 style={styles.title}>Seliat Estate CDA</h1>
-          <p style={styles.subtitle}>Please enter your details</p>
-        </div>
+        <div style={styles.card}>
+          <div style={styles.brandSection}>
+            <h1 style={styles.title}>Seliat Estate CDA</h1>
+            <p style={styles.subtitle}>Please enter your details</p>
+          </div>
 
         <div style={styles.form}>
           <div style={{
@@ -343,6 +349,7 @@ export default function Login() {
             Sign up
           </button>
         </p>
+        </div>
       </div>
     </div>
   )

@@ -7,7 +7,6 @@ import Badge from './Badge'
 import ConfirmModal from './ConfirmModal'
 import Pagination from './Pagination'
 import FormError from './FormError'
-import AccessCodeQr from './AccessCodeQr'
 
 // The "manage your own delivery access code" feature — used by a resident's
 // home screen and by an admin's "My Code" tab. Both previously hand-rolled
@@ -40,7 +39,6 @@ export default function OwnCodeCard({ profile }) {
     generate, revoke, clearHistory,
   } = useOwnAccessCode(profile.id)
   const [copied, setCopied] = useState(false)
-  const [showQr, setShowQr] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null)
   const [historyPage, setHistoryPage] = useState(1)
 
@@ -140,34 +138,6 @@ export default function OwnCodeCard({ profile }) {
       fontWeight: '600',
       color: theme.danger,
       margin: 0,
-      textAlign: 'center',
-    },
-    qrToggleBtn: {
-      background: 'none',
-      border: 'none',
-      color: theme.primary,
-      fontSize: '0.82rem',
-      fontWeight: '700',
-      cursor: 'pointer',
-      fontFamily: "'DM Sans', sans-serif",
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '0.4rem',
-      padding: '0.25rem',
-    },
-    qrWrap: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '0.6rem',
-      padding: '0.5rem 0 0.25rem',
-    },
-    qrHint: {
-      fontSize: '0.75rem',
-      color: theme.textMuted,
-      margin: 0,
-      fontWeight: '500',
       textAlign: 'center',
     },
     actionRow: {
@@ -424,30 +394,6 @@ export default function OwnCodeCard({ profile }) {
               Share Code
             </button>
           </div>
-
-          <button
-            type="button"
-            style={styles.qrToggleBtn}
-            onClick={() => setShowQr(v => !v)}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-              <line x1="14" y1="14" x2="14" y2="21"/>
-              <line x1="21" y1="14" x2="21" y2="21"/>
-              <line x1="17.5" y1="14" x2="17.5" y2="17.5"/>
-              <line x1="14" y1="17.5" x2="21" y2="17.5"/>
-            </svg>
-            {showQr ? 'Hide QR Code' : 'Show QR Code'}
-          </button>
-
-          {showQr && (
-            <div style={styles.qrWrap}>
-              <AccessCodeQr code={activeCode.code} />
-              <p style={styles.qrHint}>Guards can scan this instead of typing the code</p>
-            </div>
-          )}
         </div>
       ) : (
         <div style={styles.card}>
