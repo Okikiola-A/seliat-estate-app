@@ -1,56 +1,35 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useSyncExternalStore, useCallback, useState } from 'react'
+import { pwaInstallState } from '../pwaInstallState'
 
 const isIosDevice = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent)
 
-const isStandalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches ||
-  window.navigator.standalone === true
-
-// Chrome (and other Chromium browsers) fire `beforeinstallprompt` once per
-// page load when the PWA installability criteria are met, then suppress it
-// afterward — there's no way to make the browser show its native prompt
-// again on demand. The workaround: capture that event the moment it fires
-// and hang onto it, so a persistent on-page button can trigger the exact
-// same native install dialog whenever the user actually wants it, instead
-// of only getting one unpredictable moment to click it.
-//
-// iOS Safari never fires this event at all — it has no programmatic
-// install API — so iOS users always need the manual "Share -> Add to Home
-// Screen" instructions instead. `isIos` lets callers show that fallback.
+// Thin wrapper around the shared pwaInstallState module (see that file for
+// why the actual event listener lives there instead of here) — this hook
+// just subscribes any component that renders it to that shared state, so
+// multiple components (or the same one, remounting on navigation) all see
+// the same install status without each needing its own listener.
 export function usePwaInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null)
-  const [installed, setInstalled] = useState(isStandalone)
+  const deferredPrompt = useSyncExternalStore(pwaInstallState.subscribe, pwaInstallState.getDeferredPrompt)
+  const installed = useSyncExternalStore(pwaInstallState.subscribe, pwaInstallState.getInstalled)
 
-  useEffect(() => {
-    const onBeforeInstallPrompt = (e) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-    }
-    const onAppInstalled = () => {
-      setInstalled(true)
-      setDeferredPrompt(null)
-    }
-
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
-    window.addEventListener('appinstalled', onAppInstalled)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
-      window.removeEventListener('appinstalled', onAppInstalled)
-    }
-  }, [])
+  // Tracks whether *this* hook instance just walked the user through a
+  // successful install, so the calling screen can show a one-time
+  // "installed just now, here's what to do next" state distinct from
+  // "was already installed before you even opened this page."
+  const [justInstalled, setJustInstalled] = useState(false)
 
   const promptInstall = useCallback(async () => {
-    if (!deferredPrompt) return
-    deferredPrompt.prompt()
-    await deferredPrompt.userChoice
-    // A captured prompt event can only be triggered once — drop it either
-    // way (accepted or dismissed) so a stale, already-spent event can't be
-    // reused. If the criteria are still met, Chrome will fire a fresh one.
-    setDeferredPrompt(null)
-  }, [deferredPrompt])
+    const prompt = pwaInstallState.getDeferredPrompt()
+    if (!prompt) return
+    prompt.prompt()
+    const choice = await prompt.userChoice
+    pwaInstallState.clearPrompt()
+    if (choice.outcome === 'accepted') setJustInstalled(true)
+  }, [])
 
   return {
     installed,
+    justInstalled,
     canPromptInstall: !!deferredPrompt,
     isIos: isIosDevice(),
     promptInstall,

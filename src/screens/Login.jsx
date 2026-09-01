@@ -5,9 +5,11 @@ import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from '../components/PeekPasswordInput'
 import PasswordVisibilityToggle from '../components/PasswordVisibilityToggle'
 import FormError from '../components/FormError'
+import { usePwaInstall } from '../hooks/usePwaInstall'
 
 export default function Login() {
   const { theme } = useTheme()
+  const { installed } = usePwaInstall()
   const navigate = useNavigate()
   const [email, setEmail] = useState(() => localStorage.getItem('seliat-remember-email') || '')
   const [password, setPassword] = useState('')
@@ -206,21 +208,21 @@ export default function Login() {
       fontSize: '0.875rem',
       padding: 0,
     },
-    installRow: {
-      textAlign: 'center',
-      margin: '-0.5rem 0 0 0',
-    },
-    installLink: {
-      background: 'none',
-      border: 'none',
-      color: theme.textMuted,
-      fontWeight: '600',
+    installBtn: {
+      backgroundColor: theme.primaryLight,
+      color: theme.primary,
+      border: `1.5px solid ${theme.primary}`,
+      borderRadius: '6px',
+      padding: '0.85rem',
+      fontSize: '0.9rem',
+      fontWeight: '700',
       cursor: 'pointer',
       fontFamily: "'DM Sans', sans-serif",
-      fontSize: '0.78rem',
-      padding: 0,
-      textDecoration: 'underline',
-      textUnderlineOffset: '2px',
+      width: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.5rem',
     },
   }
 
@@ -356,15 +358,20 @@ export default function Login() {
           </button>
         </p>
 
-        <p style={styles.installRow}>
+        {!installed && (
           <button
-            style={styles.installLink}
-            onClick={() => navigate('/install')}
             type="button"
+            style={styles.installBtn}
+            onClick={() => navigate('/install')}
           >
-            Install this app on your device
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.primary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12"/>
+              <path d="M7 10l5 5 5-5"/>
+              <path d="M4 19h16"/>
+            </svg>
+            Install This App
           </button>
-        </p>
+        )}
       </div>
     </div>
   )
