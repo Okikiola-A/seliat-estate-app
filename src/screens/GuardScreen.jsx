@@ -5,6 +5,7 @@ import { useTheme } from '../context/useTheme'
 import { capitalizeName } from '../utils/helpers'
 import AvatarMenu from '../components/AvatarMenu'
 import PasswordReminderBanner from '../components/PasswordReminderBanner'
+import QrScanner from '../components/QrScanner'
 
 export default function GuardScreen({ profile, showPasswordReminder, onSnoozeReminder }) {
   const { theme } = useTheme()
@@ -12,6 +13,7 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
   const [code, setCode] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const inputRef = useRef(null)
 
   const handleChange = (e) => {
@@ -29,15 +31,15 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
     inputRef.current?.focus()
   }
 
-  const verifyCode = async () => {
-    if (code.length < 6) return
+  const verifyCode = async (codeValue = code) => {
+    if (codeValue.length < 6) return
     setLoading(true)
     setResult(null)
 
     const { data, error } = await supabase
       .from('delivery_codes')
       .select('*')
-      .eq('code', code)
+      .eq('code', codeValue)
       .single()
 
     if (error || !data) {
@@ -61,7 +63,7 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
     const { data: claimed, error: claimError } = await supabase
       .from('delivery_codes')
       .update({ used: true, used_at: new Date(), verified_by: profile.id })
-      .eq('code', code)
+      .eq('code', codeValue)
       .eq('used', false)
       .select()
 
@@ -79,6 +81,19 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
 
     setResult({ valid: true, message: 'Access Granted' })
     setLoading(false)
+  }
+
+  // The QR encodes nothing but the plain code string (see helpers.js's
+  // shareAccessCode) — sanitize it the same way manual typing already is,
+  // then feed it straight into the exact same verification flow. Passing
+  // the sanitized value directly into verifyCode() (rather than relying on
+  // setCode() + the code state) avoids waiting on a state-update
+  // round-trip before verification can start.
+  const handleScanResult = (rawValue) => {
+    const sanitized = rawValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6)
+    setScanning(false)
+    setCode(sanitized)
+    verifyCode(sanitized)
   }
 
   const reset = () => {
@@ -210,6 +225,22 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
       color: theme.primaryText,
       cursor: 'pointer',
     },
+    scanBtn: {
+      backgroundColor: theme.primaryLight,
+      color: theme.primary,
+      border: `1.5px solid ${theme.primary}`,
+      borderRadius: '6px',
+      padding: '0.85rem',
+      fontSize: '0.9rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      fontFamily: "'DM Sans', sans-serif",
+      width: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '0.5rem',
+    },
     spinnerWrap: {
       display: 'flex',
       alignItems: 'center',
@@ -264,6 +295,13 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
+
+      {scanning && (
+        <QrScanner
+          onDecode={handleScanResult}
+          onClose={() => setScanning(false)}
+        />
+      )}
 
       <div style={styles.header}>
         <p style={styles.headerName} title={capitalizeName(profile.full_name)}>{capitalizeName(profile.full_name)}</p>
@@ -322,7 +360,7 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
                   opacity: loading ? 0.7 : 1,
                   flex: code.length > 0 ? 2 : 1,
                 }}
-                onClick={verifyCode}
+                onClick={() => verifyCode()}
                 disabled={loading || code.length < 6}
                 type="button"
               >
@@ -334,6 +372,25 @@ export default function GuardScreen({ profile, showPasswordReminder, onSnoozeRem
                 ) : 'Confirm'}
               </button>
             </div>
+
+            <button
+              type="button"
+              style={styles.scanBtn}
+              onClick={() => setScanning(true)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <rect x="7" y="7" width="4" height="4"/>
+                <rect x="13" y="7" width="4" height="4"/>
+                <rect x="7" y="13" width="4" height="4"/>
+                <line x1="15" y1="15" x2="17" y2="15"/>
+                <line x1="17" y1="17" x2="17" y2="17"/>
+              </svg>
+              Scan QR Code Instead
+            </button>
           </div>
         ) : (
           <div style={{ ...styles.card, animation: 'fadeIn 0.2s ease' }}>
