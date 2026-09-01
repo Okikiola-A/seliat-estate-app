@@ -5,7 +5,6 @@ import { useTheme } from '../context/useTheme'
 import PeekPasswordInput from '../components/PeekPasswordInput'
 import PasswordVisibilityToggle from '../components/PasswordVisibilityToggle'
 import FormError from '../components/FormError'
-import InstallAppBanner from '../components/InstallAppBanner'
 
 export default function Login() {
   const { theme } = useTheme()
@@ -70,12 +69,6 @@ export default function Login() {
       justifyContent: 'center',
       padding: '1.5rem',
       fontFamily: "'DM Sans', sans-serif",
-    },
-    pageWrap: {
-      width: '100%',
-      maxWidth: '400px',
-      display: 'flex',
-      flexDirection: 'column',
     },
     card: {
       width: '100%',
@@ -213,6 +206,22 @@ export default function Login() {
       fontSize: '0.875rem',
       padding: 0,
     },
+    installRow: {
+      textAlign: 'center',
+      margin: '-0.5rem 0 0 0',
+    },
+    installLink: {
+      background: 'none',
+      border: 'none',
+      color: theme.textMuted,
+      fontWeight: '600',
+      cursor: 'pointer',
+      fontFamily: "'DM Sans', sans-serif",
+      fontSize: '0.78rem',
+      padding: 0,
+      textDecoration: 'underline',
+      textUnderlineOffset: '2px',
+    },
   }
 
   const inputStyle = (field) => ({
@@ -236,14 +245,11 @@ export default function Login() {
         input:focus { outline: none; }
       `}</style>
 
-      <div style={styles.pageWrap}>
-        <InstallAppBanner />
-
-        <div style={styles.card}>
-          <div style={styles.brandSection}>
-            <h1 style={styles.title}>Seliat Estate CDA</h1>
-            <p style={styles.subtitle}>Please enter your details</p>
-          </div>
+      <div style={styles.card}>
+        <div style={styles.brandSection}>
+          <h1 style={styles.title}>Seliat Estate CDA</h1>
+          <p style={styles.subtitle}>Please enter your details</p>
+        </div>
 
         <div style={styles.form}>
           <div style={{
@@ -349,7 +355,16 @@ export default function Login() {
             Sign up
           </button>
         </p>
-        </div>
+
+        <p style={styles.installRow}>
+          <button
+            style={styles.installLink}
+            onClick={() => navigate('/install')}
+            type="button"
+          >
+            Install this app on your device
+          </button>
+        </p>
       </div>
     </div>
   )

@@ -107,8 +107,20 @@ export const shareAccessCode = async (code, expiresAt) => {
   try {
     const { default: QRCode } = await import('qrcode')
     const dataUrl = await QRCode.toDataURL(code, { width: 480, margin: 2 })
-    const blob = await (await fetch(dataUrl)).blob()
-    qrFile = new File([blob], `seliat-access-code-${code}.png`, { type: 'image/png' })
+
+    // Deliberately NOT fetch(dataUrl) -> .blob() here: the site's CSP
+    // connect-src has no `data:` entry (and shouldn't need one just for
+    // this), and Chromium browsers apply connect-src to fetch() calls
+    // against data: URIs too. That fetch was being silently blocked,
+    // thrown, and swallowed by this try/catch — so qrFile always ended up
+    // null and every share silently fell back to text-only, on every
+    // platform. Decoding the base64 payload by hand avoids the network
+    // layer (and CSP) entirely, since it's just string/byte manipulation.
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    qrFile = new File([bytes], `seliat-access-code-${code}.png`, { type: 'image/png' })
   } catch {
     // QR generation failed for any reason (unsupported environment, etc.)
     // — not fatal, the share still goes ahead as text-only below since

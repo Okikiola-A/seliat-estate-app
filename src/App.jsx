@@ -13,6 +13,7 @@ import AdminDashboard from './screens/AdminDashboard'
 import ResetPassword from './screens/ResetPassword'
 import AccountStatus from './screens/AccountStatus'
 import Settings from './screens/Settings'
+import InstallApp from './screens/InstallApp'
 
 export default function App() {
   const { applyUserTheme } = useTheme()
@@ -136,6 +137,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/install" element={<InstallApp />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     )
@@ -174,6 +176,7 @@ export default function App() {
       <Routes>
         <Route path="/guard" element={<GuardScreen profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
         <Route path="/guard/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
+        <Route path="/install" element={<InstallApp />} />
         <Route path="*" element={<Navigate to="/guard" replace />} />
       </Routes>
     )
@@ -183,6 +186,7 @@ export default function App() {
       <Routes>
         <Route path="/resident" element={<ResidentScreen profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
         <Route path="/resident/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
+        <Route path="/install" element={<InstallApp />} />
         <Route path="*" element={<Navigate to="/resident" replace />} />
       </Routes>
     )
@@ -194,6 +198,7 @@ export default function App() {
         <Route path="/admin/settings" element={<Settings profile={userProfile} onPasswordChanged={onPasswordChanged} />} />
         <Route path="/admin/users/:userId" element={<AdminDashboard profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
         <Route path="/admin/:tab" element={<AdminDashboard profile={userProfile} showPasswordReminder={showPasswordReminder} onSnoozeReminder={onSnoozeReminder} />} />
+        <Route path="/install" element={<InstallApp />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     )
