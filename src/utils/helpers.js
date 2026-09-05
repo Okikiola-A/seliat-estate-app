@@ -37,6 +37,50 @@ export const formatNigerianPhone = (value) => {
   return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`
 }
 
+// A live-formatted phone input (spaces auto-inserted between digit groups,
+// via formatNigerianPhone above) has a well-known controlled-input bug if
+// the field's value is just reformatted and reassigned on every keystroke:
+// the browser resets the caret to the end of the field whenever its value
+// is set programmatically to something other than what plain native
+// editing alone would have produced — which is exactly what happens here
+// every time a space gets inserted or removed around the edited digit.
+// Without correcting for this, deleting a character anywhere but the very
+// end looks like "delete only ever removes the last digit", because the
+// caret silently jumps to the end right after every single edit, so the
+// *next* keystroke always lands there instead of where it was aimed.
+//
+// The fix: count how many actual digits sit before the caret in the
+// current (post-edit, pre-reformat) value, reformat, then walk the newly
+// formatted string to find the position right after that same digit
+// count — that's where the caret needs to be restored to. Call this from
+// an onChange handler with the input element itself (so it can read
+// e.target.selectionStart, which already reflects where the browser's own
+// native edit left the caret before our reformatting steps in and shifts
+// the space boundaries around it).
+export const formatPhoneKeepingCaret = (inputEl, formatter = formatNigerianPhone) => {
+  const value = inputEl.value
+  const caret = inputEl.selectionStart ?? value.length
+  const digitsBeforeCaret = value.slice(0, caret).replace(/\D/g, '').length
+
+  const formatted = formatter(value)
+
+  let newCaret = formatted.length
+  if (digitsBeforeCaret === 0) {
+    newCaret = 0
+  } else {
+    let seen = 0
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) seen++
+      if (seen === digitsBeforeCaret) {
+        newCaret = i + 1
+        break
+      }
+    }
+  }
+
+  return { formatted, newCaret }
+}
+
 // Converts this app's local Nigerian display format (e.g. "0801 234 5678",
 // as produced by formatNigerianPhone above) into E.164 (e.g.
 // "+2348012345678"), which is what Supabase's phone auth provider requires

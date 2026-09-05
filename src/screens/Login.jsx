@@ -8,44 +8,33 @@ import FormError from '../components/FormError'
 import { usePwaInstall } from '../hooks/usePwaInstall'
 import { formatNigerianPhone, toE164Nigerian } from '../utils/helpers'
 
-const REMEMBER_KEYS = {
-  email: 'seliat-remember-email',
-  phone: 'seliat-remember-phone',
-}
+const REMEMBER_KEY = 'seliat-remember-identifier'
 
 export default function Login() {
   const { theme } = useTheme()
   const { installed } = usePwaInstall()
   const navigate = useNavigate()
-
-  // Which identifier is being used to sign in. Kept as a single toggle
-  // (rather than one combined field) since the two need different input
-  // types, formatting, and conversion before hitting Supabase.
-  const [loginMethod, setLoginMethod] = useState(() =>
-    localStorage.getItem(REMEMBER_KEYS.phone) ? 'phone' : 'email'
-  )
-  const [identifier, setIdentifier] = useState(() =>
-    localStorage.getItem(REMEMBER_KEYS[loginMethod]) || ''
-  )
+  const [identifier, setIdentifier] = useState(() => localStorage.getItem(REMEMBER_KEY) || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_KEYS[loginMethod]))
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_KEY))
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [shakeFields, setShakeFields] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const passwordRef = useRef(null)
 
-  const switchMethod = (method) => {
-    if (method === loginMethod) return
-    setLoginMethod(method)
-    setIdentifier(localStorage.getItem(REMEMBER_KEYS[method]) || '')
-    setRememberMe(!!localStorage.getItem(REMEMBER_KEYS[method]))
-    setError(null)
-  }
+  // One field, no explicit email/phone toggle — which one the person meant
+  // is inferred from what they actually typed. An '@' means email; a
+  // digits-only value (once formatting is stripped) means phone. This is
+  // also why the live-formatting below only kicks in while the string
+  // still looks purely numeric: the moment a letter appears (someone
+  // typing an email), formatting stops touching it at all.
+  const isEmailIdentifier = identifier.includes('@')
 
-  const handleIdentifierChange = (value) => {
-    setIdentifier(loginMethod === 'phone' ? formatNigerianPhone(value) : value)
+  const handleIdentifierChange = (raw) => {
+    const looksLikePhoneSoFar = /^[\d\s]*$/.test(raw)
+    setIdentifier(looksLikePhoneSoFar ? formatNigerianPhone(raw) : raw)
     setError(null)
   }
 
@@ -55,22 +44,22 @@ export default function Login() {
     setError(null)
 
     const { error } = await supabase.auth.signInWithPassword(
-      loginMethod === 'email'
+      isEmailIdentifier
         ? { email: identifier, password }
         : { phone: toE164Nigerian(identifier), password }
     )
 
     if (error) {
       setPassword('')
-      setError(`The ${loginMethod === 'email' ? 'email' : 'phone number'} or password you entered is incorrect.`)
+      setError('The email/phone or password you entered is incorrect.')
       setLoading(false)
       setShakeFields(true)
       setTimeout(() => setShakeFields(false), 600)
     } else {
       if (rememberMe) {
-        localStorage.setItem(REMEMBER_KEYS[loginMethod], identifier)
+        localStorage.setItem(REMEMBER_KEY, identifier)
       } else {
-        localStorage.removeItem(REMEMBER_KEYS[loginMethod])
+        localStorage.removeItem(REMEMBER_KEY)
       }
     }
   }
@@ -133,21 +122,6 @@ export default function Login() {
       color: theme.textMuted,
       margin: 0,
       fontWeight: '500',
-    },
-    methodToggle: {
-      display: 'flex',
-      gap: '0.5rem',
-    },
-    methodPill: {
-      flex: 1,
-      padding: '0.6rem',
-      borderRadius: '6px',
-      fontSize: '0.85rem',
-      fontWeight: '700',
-      cursor: 'pointer',
-      fontFamily: "'DM Sans', sans-serif",
-      textAlign: 'center',
-      transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
     },
     form: {
       display: 'flex',
@@ -278,13 +252,6 @@ export default function Login() {
     border: fieldBorder(field),
   })
 
-  const methodPillStyle = (method) => ({
-    ...styles.methodPill,
-    backgroundColor: loginMethod === method ? theme.primary : 'transparent',
-    color: loginMethod === method ? theme.primaryText : theme.textSecondary,
-    border: `1.5px solid ${loginMethod === method ? theme.primary : theme.border}`,
-  })
-
   return (
     <div style={styles.container}>
       <style>{`
@@ -307,22 +274,13 @@ export default function Login() {
           <p style={styles.subtitle}>Please enter your details</p>
         </div>
 
-        <div style={styles.methodToggle}>
-          <button type="button" style={methodPillStyle('email')} onClick={() => switchMethod('email')}>
-            Email
-          </button>
-          <button type="button" style={methodPillStyle('phone')} onClick={() => switchMethod('phone')}>
-            Phone
-          </button>
-        </div>
-
         <div style={styles.form}>
           <div style={{
             ...styles.fieldWrap,
             animation: shakeFields ? 'shake 0.6s ease' : 'none',
           }}>
             <span style={styles.fieldIcon}>
-              {loginMethod === 'email' ? (
+              {isEmailIdentifier ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                   stroke={iconColor('identifier')}
                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -339,14 +297,14 @@ export default function Login() {
             </span>
             <input
               style={{ ...inputStyle('identifier'), paddingLeft: '2.75rem' }}
-              type={loginMethod === 'email' ? 'email' : 'tel'}
-              placeholder={loginMethod === 'email' ? 'Email address' : 'e.g. 0801 234 5678'}
+              type="text"
+              placeholder="Email or phone number"
               value={identifier}
               onChange={(e) => handleIdentifierChange(e.target.value)}
               onFocus={() => setFocusedField('identifier')}
               onBlur={() => setFocusedField(null)}
               onKeyDown={(e) => handleKeyDown(e, 'identifier')}
-              autoComplete={loginMethod === 'email' ? 'email' : 'tel'}
+              autoComplete="username"
             />
           </div>
 
