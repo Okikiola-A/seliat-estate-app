@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase, createIsolatedClient } from '../supabase'
 import { useTheme } from '../context/useTheme'
-import { capitalizeName, formatDate, getCodeStatus, generateTempPassword, formatNigerianPhone, validateEmail, validatePhone } from '../utils/helpers'
+import { capitalizeName, formatDate, getCodeStatus, generateTempPassword, formatNigerianPhone, toE164Nigerian, validateEmail, validatePhone } from '../utils/helpers'
 import { responsiveTableCSS } from '../utils/responsiveTableStyles'
 import ConfirmModal from '../components/ConfirmModal'
 import Pagination from '../components/Pagination'
@@ -42,6 +42,10 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   const [page, setPage] = useState(1)
   const [residentDetail, setResidentDetail] = useState(null)
   const [residentCodes, setResidentCodes] = useState([])
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [resetPasswordResult, setResetPasswordResult] = useState(null)
+  const [resetPasswordError, setResetPasswordError] = useState(null)
+  const [resetPasswordCopied, setResetPasswordCopied] = useState(false)
   const [analytics, setAnalytics] = useState({
     today: 0, thisWeek: 0, total: 0, used: 0, active: 0, expired: 0, revoked: 0
   })
@@ -50,6 +54,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   const [createForm, setCreateForm] = useState({
     full_name: '', email: '', phone: '', role: 'resident', block_number: '', house_number: '',
   })
+  const [createMethod, setCreateMethod] = useState('email')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState(null)
   const [createdCreds, setCreatedCreds] = useState(null)
@@ -94,13 +99,19 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
   }
 
   const fetchPendingUsers = async () => {
-    // Only surface accounts that have actually confirmed their email —
-    // otherwise a fake/mistyped address (or a real signup who simply
-    // hasn't checked their inbox yet) shows up in the approval queue
-    // looking identical to a legitimate request, and could get approved
-    // despite the account being functionally unusable until confirmed.
+    // Email signups only surface once they've actually confirmed their
+    // email — otherwise a fake/mistyped address (or a real signup who
+    // simply hasn't checked their inbox yet) shows up in the approval
+    // queue looking identical to a legitimate request, and could get
+    // approved despite the account being functionally unusable until
+    // confirmed. Phone signups have no email confirmation step at all
+    // (admin approval itself is the trust gate for them, by design — see
+    // handoff notes on this feature), so they'd never satisfy
+    // email_confirmed=true and would sit invisible forever if that filter
+    // applied to them too.
     const { data } = await supabase
-      .from('users').select('*').eq('status', 'pending').eq('email_confirmed', true)
+      .from('users').select('*').eq('status', 'pending')
+      .or('signup_method.eq.phone,email_confirmed.eq.true')
       .order('created_at', { ascending: false })
     setPendingUsers(data || [])
   }
@@ -185,6 +196,8 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
       return
     }
     setResidentCodesPage(1)
+    setResetPasswordResult(null)
+    setResetPasswordError(null)
     let cancelled = false
 
     supabase.from('users').select('id, full_name').eq('id', userId).single().then(({ data }) => {
@@ -243,6 +256,42 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     fetchAllUsers()
   }
 
+  // Exists specifically for phone-only accounts, which have no self-serve
+  // "forgot password" path at all (no SMS to send an OTP to — see handoff
+  // notes on this feature). Email accounts already have that via
+  // ForgotPassword.jsx; this is the fallback for everyone else, and works
+  // for any account regardless of signup method, so there's no need to
+  // special-case it in the UI beyond just always offering it here.
+  const resetResidentPassword = async () => {
+    setResettingPassword(true)
+    setResetPasswordError(null)
+
+    const { data, error } = await supabase.functions.invoke('reset-user-password', {
+      body: { target_user_id: userId },
+    })
+
+    if (error || !data?.temp_password) {
+      setResetPasswordError('Could not reset this password. Please try again.')
+      setResettingPassword(false)
+      setConfirmModal(null)
+      return
+    }
+
+    await logActivity('reset password', capitalizeName(residentDetail?.full_name), 'Password reset by admin')
+
+    setResetPasswordResult(data.temp_password)
+    setResettingPassword(false)
+    setConfirmModal(null)
+  }
+
+  const copyResetPassword = () => {
+    navigator.clipboard.writeText(
+      `Temporary password: ${resetPasswordResult}\n\nLog in with this password, then change it from Settings.`
+    )
+    setResetPasswordCopied(true)
+    setTimeout(() => setResetPasswordCopied(false), 2000)
+  }
+
   const revokeCode = async (code) => {
     await supabase.from('delivery_codes').update({ revoked: true }).eq('id', code.id)
     await logActivity('revoked', code.code, capitalizeName(code.resident?.full_name) || 'Unknown resident')
@@ -283,7 +332,9 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
 
   const validateCreateForm = () => {
     if (!createForm.full_name.trim()) return 'Please enter a full name'
-    if (!createForm.email.trim() || !validateEmail(createForm.email)) return 'Please enter a valid email address'
+    if (createMethod === 'email' && (!createForm.email.trim() || !validateEmail(createForm.email))) {
+      return 'Please enter a valid email address'
+    }
     if (!createForm.phone.trim() || !validatePhone(createForm.phone)) return 'Please enter a valid 11-digit phone number'
     if (createForm.role === 'resident') {
       if (!createForm.block_number.trim()) return 'Please enter a street/block'
@@ -302,24 +353,25 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     const tempPassword = generateTempPassword()
     const tempClient = createIsolatedClient()
 
+    const metadata = {
+      full_name: createForm.full_name.trim(),
+      phone: createForm.phone,
+      block_number: createForm.role === 'resident' ? createForm.block_number.trim().toUpperCase() : null,
+      house_number: createForm.role === 'resident' ? createForm.house_number.replace(/\D/g, '') : null,
+      signup_method: createMethod,
+    }
+
     // The public.users row is now created automatically by the
     // handle_new_user trigger the instant this signUp() call succeeds (same
     // trigger the self-registration flow relies on) — it reads full_name /
     // phone / block_number / house_number out of this metadata and inserts
     // a row with role: 'resident', status: 'pending' by default, in the
     // same DB transaction as the auth.users insert itself.
-    const { data, error: signUpError } = await tempClient.auth.signUp({
-      email: createForm.email.trim(),
-      password: tempPassword,
-      options: {
-        data: {
-          full_name: createForm.full_name.trim(),
-          phone: createForm.phone,
-          block_number: createForm.role === 'resident' ? createForm.block_number.trim().toUpperCase() : null,
-          house_number: createForm.role === 'resident' ? createForm.house_number.replace(/\D/g, '') : null,
-        },
-      },
-    })
+    const { data, error: signUpError } = await tempClient.auth.signUp(
+      createMethod === 'email'
+        ? { email: createForm.email.trim(), password: tempPassword, options: { data: metadata } }
+        : { phone: toE164Nigerian(createForm.phone), password: tempPassword, options: { data: metadata } }
+    )
 
     if (signUpError) {
       setCreateError(signUpError.message)
@@ -328,18 +380,22 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     }
 
     // Supabase deliberately does NOT return an error when signUp() is
-    // called with an email that already exists but hasn't been confirmed
-    // yet — it silently returns the existing (unconfirmed) user instead,
-    // to avoid letting an attacker probe which emails are already
-    // registered. The documented way to detect this here is an empty
-    // identities array on the returned user. Without this check, creating
-    // an account with an email already in use (e.g. a previous unconfirmed
-    // signup, or one from a account that was deleted while still pending)
-    // silently reuses that existing row instead of erroring — no new
-    // account is created, no new confirmation email is sent, and the
-    // admin has no way to tell the difference from a genuine success.
+    // called with an email/phone that already exists but hasn't been
+    // confirmed yet — it silently returns the existing (unconfirmed) user
+    // instead, to avoid letting an attacker probe which emails/numbers are
+    // already registered. The documented way to detect this here is an
+    // empty identities array on the returned user. Without this check,
+    // creating an account with an identifier already in use (e.g. a
+    // previous unconfirmed signup, or one from an account that was deleted
+    // while still pending) silently reuses that existing row instead of
+    // erroring — no new account is created, and the admin has no way to
+    // tell the difference from a genuine success.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
-      setCreateError('An account with this email already exists. Ask the user to check their inbox for a confirmation link, or use a different email address.')
+      setCreateError(
+        createMethod === 'email'
+          ? 'An account with this email already exists. Ask the user to check their inbox for a confirmation link, or use a different email address.'
+          : 'An account with this phone number already exists.'
+      )
       setCreating(false)
       return
     }
@@ -384,17 +440,23 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
 
     await logActivity('created', capitalizeName(createForm.full_name), `${cap(createForm.role)} account created by admin`)
 
-    setCreatedCreds({ email: createForm.email.trim(), password: tempPassword })
+    setCreatedCreds({
+      identifierLabel: createMethod === 'email' ? 'Email' : 'Phone',
+      identifier: createMethod === 'email' ? createForm.email.trim() : createForm.phone,
+      password: tempPassword,
+    })
     setCreateForm({ full_name: '', email: '', phone: '', role: 'resident', block_number: '', house_number: '' })
     setCreating(false)
   }
 
   const copyCreateCreds = () => {
+    const isEmail = createdCreds.identifierLabel === 'Email'
     navigator.clipboard.writeText(
-      `Email: ${createdCreds.email}\n` +
+      `${createdCreds.identifierLabel}: ${createdCreds.identifier}\n` +
       `Temporary password: ${createdCreds.password}\n\n` +
-      `Before you can log in, check your email for a confirmation link and click it.\n` +
-      `Once confirmed, log in with the details above, then change your password from the temporary one.`
+      (isEmail
+        ? `Before you can log in, check your email for a confirmation link and click it.\nOnce confirmed, log in with the details above, then change your password from the temporary one.`
+        : `Log in with the details above, then change your password from the temporary one.`)
     )
     setCreateCopied(true)
     setTimeout(() => setCreateCopied(false), 2000)
@@ -438,6 +500,8 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
 
   const styles = {
     container: { minHeight: '100vh', backgroundColor: theme.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif" },
+    methodToggle: { display: 'flex', gap: '0.5rem' },
+    methodPill: { flex: 1, padding: '0.6rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', transition: 'background-color 0.15s, color 0.15s, border-color 0.15s' },
     header: { backgroundColor: theme.primary, padding: '0 1.25rem', height: '64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 150, boxSizing: 'border-box' },
     headerTitleCenter: { fontSize: '1rem', fontWeight: '700', color: theme.primaryText, margin: 0, minWidth: 0, flex: 1, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     hamburger: { background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', flexDirection: 'column', gap: '4px', width: '36px' },
@@ -512,6 +576,13 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     confirmNotice: { fontSize: '0.82rem', color: theme.textSecondary, margin: 0, fontWeight: '500', lineHeight: '1.5' },
   }
 
+  const methodPillStyle = (activeMethod, method) => ({
+    ...styles.methodPill,
+    backgroundColor: activeMethod === method ? theme.primary : 'transparent',
+    color: activeMethod === method ? theme.primaryText : theme.textSecondary,
+    border: `1.5px solid ${activeMethod === method ? theme.primary : theme.border}`,
+  })
+
   // Sidebar tab clicks navigate to a real URL instead of just flipping local
   // state — this is what gives the browser/hardware back button something
   // to actually step through between tabs.
@@ -529,6 +600,7 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     setSortBy('joined')
     setCreatedCreds(null)
     setCreateError(null)
+    setCreateMethod('email')
     setPage(1)
   }, [activeTab])
 
@@ -536,6 +608,16 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
     return (
       <div style={styles.container}>
         <style>{responsiveTableCSS}</style>
+
+        {confirmModal && (
+          <ConfirmModal
+            title={confirmModal.title}
+            message={confirmModal.message}
+            onConfirm={confirmModal.onConfirm}
+            onCancel={() => setConfirmModal(null)}
+          />
+        )}
+
         <div style={{ ...styles.header, zIndex: 150 }}>
           <button style={styles.backBtn} onClick={() => navigate(-1)}>← Back</button>
           <p style={styles.headerTitleCenter} title={capitalizeName(residentDetail?.full_name)}>{capitalizeName(residentDetail?.full_name)}</p>
@@ -547,6 +629,52 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
         )}
 
         <div style={styles.body}>
+          <div style={styles.section}>
+            <p style={styles.sectionLabel}>Account Access</p>
+            {resetPasswordResult ? (
+              <div style={styles.card}>
+                <p style={styles.cardLabelBlue}>Password Reset</p>
+                <p style={styles.confirmNotice}>
+                  Share this temporary password with {capitalizeName(residentDetail?.full_name)}. They'll be
+                  asked to change it the next time they log in.
+                </p>
+                <div style={styles.credsBox}>
+                  <div style={styles.credsRow}>
+                    <span style={styles.credsKey}>Temp Password</span>
+                    <span style={styles.credsValue}>{resetPasswordResult}</span>
+                  </div>
+                </div>
+                <div style={styles.actionRow}>
+                  <button style={styles.copyBtn} onClick={copyResetPassword}>
+                    {resetPasswordCopied ? 'Copied!' : 'Copy Password'}
+                  </button>
+                  <button style={styles.generateBtn} onClick={() => setResetPasswordResult(null)}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={styles.card}>
+                <p style={styles.confirmNotice}>
+                  If {capitalizeName(residentDetail?.full_name)} is locked out or has forgotten their password,
+                  reset it here and share the new temporary password with them directly.
+                </p>
+                <FormError message={resetPasswordError} />
+                <button
+                  style={{ ...styles.clearLogBtn, width: '100%', opacity: resettingPassword ? 0.7 : 1 }}
+                  onClick={() => setConfirmModal({
+                    title: 'Reset Password',
+                    message: `This generates a new temporary password for ${capitalizeName(residentDetail?.full_name)} and immediately invalidates their current one. They'll need to change it on next login.`,
+                    onConfirm: resetResidentPassword,
+                  })}
+                  disabled={resettingPassword}
+                >
+                  {resettingPassword ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            )}
+          </div>
+
           {residentCodes.length === 0 ? (
             <div style={styles.emptyState}>
               <p style={styles.emptyTitle}>No codes yet</p>
@@ -865,14 +993,15 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                   <div style={styles.card}>
                     <p style={styles.cardLabelBlue}>Account Created</p>
                     <p style={styles.confirmNotice}>
-                      The button below copies the email, temporary password, and instructions
-                      (confirming their email, then changing their password) all together, ready to share with the user.
+                      {createdCreds.identifierLabel === 'Email'
+                        ? 'The button below copies the email, temporary password, and instructions (confirming their email, then changing their password) all together, ready to share with the user.'
+                        : 'The button below copies the phone number, temporary password, and instructions to change their password, ready to share with the user.'}
                     </p>
 
                     <div style={styles.credsBox}>
                       <div style={styles.credsRow}>
-                        <span style={styles.credsKey}>Email</span>
-                        <span style={styles.credsValue}>{createdCreds.email}</span>
+                        <span style={styles.credsKey}>{createdCreds.identifierLabel}</span>
+                        <span style={styles.credsValue}>{createdCreds.identifier}</span>
                       </div>
                       <div style={styles.credsRow}>
                         <span style={styles.credsKey}>Temp Password</span>
@@ -891,6 +1020,23 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                   </div>
                 ) : (
                   <div style={styles.card}>
+                    <div style={styles.methodToggle}>
+                      <button
+                        type="button"
+                        style={methodPillStyle(createMethod, 'email')}
+                        onClick={() => { setCreateMethod('email'); setCreateError(null) }}
+                      >
+                        Email
+                      </button>
+                      <button
+                        type="button"
+                        style={methodPillStyle(createMethod, 'phone')}
+                        onClick={() => { setCreateMethod('phone'); setCreateError(null) }}
+                      >
+                        Phone
+                      </button>
+                    </div>
+
                     <div style={styles.fieldGroup}>
                       <label style={styles.fieldLabel}>Full name</label>
                       <input
@@ -902,16 +1048,18 @@ export default function AdminDashboard({ profile, showPasswordReminder, onSnooze
                       />
                     </div>
 
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Email address</label>
-                      <input
-                        style={styles.fieldInput}
-                        type="email"
-                        placeholder="you@example.com"
-                        value={createForm.email}
-                        onChange={e => updateCreateForm('email', e.target.value)}
-                      />
-                    </div>
+                    {createMethod === 'email' && (
+                      <div style={styles.fieldGroup}>
+                        <label style={styles.fieldLabel}>Email address</label>
+                        <input
+                          style={styles.fieldInput}
+                          type="email"
+                          placeholder="you@example.com"
+                          value={createForm.email}
+                          onChange={e => updateCreateForm('email', e.target.value)}
+                        />
+                      </div>
+                    )}
 
                     <div style={styles.fieldGroup}>
                       <label style={styles.fieldLabel}>Phone number</label>

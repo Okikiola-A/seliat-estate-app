@@ -6,46 +6,78 @@ import PeekPasswordInput from '../components/PeekPasswordInput'
 import PasswordVisibilityToggle from '../components/PasswordVisibilityToggle'
 import FormError from '../components/FormError'
 import { usePwaInstall } from '../hooks/usePwaInstall'
+import { formatNigerianPhone, toE164Nigerian } from '../utils/helpers'
+
+const REMEMBER_KEYS = {
+  email: 'seliat-remember-email',
+  phone: 'seliat-remember-phone',
+}
 
 export default function Login() {
   const { theme } = useTheme()
   const { installed } = usePwaInstall()
   const navigate = useNavigate()
-  const [email, setEmail] = useState(() => localStorage.getItem('seliat-remember-email') || '')
+
+  // Which identifier is being used to sign in. Kept as a single toggle
+  // (rather than one combined field) since the two need different input
+  // types, formatting, and conversion before hitting Supabase.
+  const [loginMethod, setLoginMethod] = useState(() =>
+    localStorage.getItem(REMEMBER_KEYS.phone) ? 'phone' : 'email'
+  )
+  const [identifier, setIdentifier] = useState(() =>
+    localStorage.getItem(REMEMBER_KEYS[loginMethod]) || ''
+  )
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('seliat-remember-email'))
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_KEYS[loginMethod]))
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [shakeFields, setShakeFields] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const passwordRef = useRef(null)
 
+  const switchMethod = (method) => {
+    if (method === loginMethod) return
+    setLoginMethod(method)
+    setIdentifier(localStorage.getItem(REMEMBER_KEYS[method]) || '')
+    setRememberMe(!!localStorage.getItem(REMEMBER_KEYS[method]))
+    setError(null)
+  }
+
+  const handleIdentifierChange = (value) => {
+    setIdentifier(loginMethod === 'phone' ? formatNigerianPhone(value) : value)
+    setError(null)
+  }
+
   const handleLogin = async () => {
-    if (!email || !password) return
+    if (!identifier || !password) return
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword(
+      loginMethod === 'email'
+        ? { email: identifier, password }
+        : { phone: toE164Nigerian(identifier), password }
+    )
 
     if (error) {
       setPassword('')
-      setError('The email or password you entered is incorrect.')
+      setError(`The ${loginMethod === 'email' ? 'email' : 'phone number'} or password you entered is incorrect.`)
       setLoading(false)
       setShakeFields(true)
       setTimeout(() => setShakeFields(false), 600)
     } else {
       if (rememberMe) {
-        localStorage.setItem('seliat-remember-email', email)
+        localStorage.setItem(REMEMBER_KEYS[loginMethod], identifier)
       } else {
-        localStorage.removeItem('seliat-remember-email')
+        localStorage.removeItem(REMEMBER_KEYS[loginMethod])
       }
     }
   }
 
   const handleKeyDown = (e, field) => {
     if (e.key === 'Enter') {
-      if (field === 'email') passwordRef.current?.focus()
+      if (field === 'identifier') passwordRef.current?.focus()
       else if (field === 'password') handleLogin()
     }
   }
@@ -101,6 +133,21 @@ export default function Login() {
       color: theme.textMuted,
       margin: 0,
       fontWeight: '500',
+    },
+    methodToggle: {
+      display: 'flex',
+      gap: '0.5rem',
+    },
+    methodPill: {
+      flex: 1,
+      padding: '0.6rem',
+      borderRadius: '6px',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      fontFamily: "'DM Sans', sans-serif",
+      textAlign: 'center',
+      transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
     },
     form: {
       display: 'flex',
@@ -231,6 +278,13 @@ export default function Login() {
     border: fieldBorder(field),
   })
 
+  const methodPillStyle = (method) => ({
+    ...styles.methodPill,
+    backgroundColor: loginMethod === method ? theme.primary : 'transparent',
+    color: loginMethod === method ? theme.primaryText : theme.textSecondary,
+    border: `1.5px solid ${loginMethod === method ? theme.primary : theme.border}`,
+  })
+
   return (
     <div style={styles.container}>
       <style>{`
@@ -253,29 +307,46 @@ export default function Login() {
           <p style={styles.subtitle}>Please enter your details</p>
         </div>
 
+        <div style={styles.methodToggle}>
+          <button type="button" style={methodPillStyle('email')} onClick={() => switchMethod('email')}>
+            Email
+          </button>
+          <button type="button" style={methodPillStyle('phone')} onClick={() => switchMethod('phone')}>
+            Phone
+          </button>
+        </div>
+
         <div style={styles.form}>
           <div style={{
             ...styles.fieldWrap,
             animation: shakeFields ? 'shake 0.6s ease' : 'none',
           }}>
             <span style={styles.fieldIcon}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke={iconColor('email')}
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
+              {loginMethod === 'email' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke={iconColor('identifier')}
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke={iconColor('identifier')}
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              )}
             </span>
             <input
-              style={{ ...inputStyle('email'), paddingLeft: '2.75rem' }}
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(null) }}
-              onFocus={() => setFocusedField('email')}
+              style={{ ...inputStyle('identifier'), paddingLeft: '2.75rem' }}
+              type={loginMethod === 'email' ? 'email' : 'tel'}
+              placeholder={loginMethod === 'email' ? 'Email address' : 'e.g. 0801 234 5678'}
+              value={identifier}
+              onChange={(e) => handleIdentifierChange(e.target.value)}
+              onFocus={() => setFocusedField('identifier')}
               onBlur={() => setFocusedField(null)}
-              onKeyDown={(e) => handleKeyDown(e, 'email')}
-              autoComplete="email"
+              onKeyDown={(e) => handleKeyDown(e, 'identifier')}
+              autoComplete={loginMethod === 'email' ? 'email' : 'tel'}
             />
           </div>
 

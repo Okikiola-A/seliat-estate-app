@@ -37,6 +37,21 @@ export const formatNigerianPhone = (value) => {
   return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`
 }
 
+// Converts this app's local Nigerian display format (e.g. "0801 234 5678",
+// as produced by formatNigerianPhone above) into E.164 (e.g.
+// "+2348012345678"), which is what Supabase's phone auth provider requires
+// as the actual login identifier. These are two separate representations
+// in two separate places: public.users.phone keeps the local format for
+// display/contact purposes everywhere in the app (unchanged by any of
+// this); auth.users.phone — set from this converted value at signup — is
+// only ever touched by Supabase itself, for signInWithPassword({ phone })
+// to match against.
+export const toE164Nigerian = (phone) => {
+  const digits = phone.replace(/\D/g, '')
+  const national = digits.startsWith('0') ? digits.slice(1) : digits
+  return `+234${national}`
+}
+
 export const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
 export const validatePhone = (phone) => {

@@ -6,7 +6,7 @@ import PeekPasswordInput from '../components/PeekPasswordInput'
 import PasswordVisibilityToggle from '../components/PasswordVisibilityToggle'
 import FormError from '../components/FormError'
 
-import { formatNigerianPhone, validateEmail, validatePhone, validatePassword } from '../utils/helpers'
+import { formatNigerianPhone, toE164Nigerian, validateEmail, validatePhone, validatePassword } from '../utils/helpers'
 
 export default function Register() {
   const { theme } = useTheme()
@@ -18,10 +18,16 @@ export default function Register() {
   const [success, setSuccess] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
+  // Which identifier this account will sign in with. Phone accounts skip
+  // email confirmation entirely (no SMS provider is configured for real
+  // verification, by design — see the handoff notes on this feature), so
+  // admin approval alone is the trust gate for them.
+  const [signupMethod, setSignupMethod] = useState('email')
 
   const [form, setForm] = useState({
     full_name: '',
     email: '',
+    recovery_email: '',
     password: '',
     confirm_password: '',
     phone: '',
@@ -30,6 +36,7 @@ export default function Register() {
   })
 
   const emailRef = useRef(null)
+  const recoveryEmailRef = useRef(null)
   const passwordRef = useRef(null)
   const confirmRef = useRef(null)
   const phoneRef = useRef(null)
@@ -45,10 +52,25 @@ export default function Register() {
     update('phone', formatNigerianPhone(value))
   }
 
+  const switchMethod = (method) => {
+    setSignupMethod(method)
+    setError(null)
+  }
+
   const validateStep1 = () => {
     if (!form.full_name.trim()) return 'Please enter your full name'
-    if (!form.email.trim()) return 'Please enter your email address'
-    if (!validateEmail(form.email)) return 'Please enter a valid email address'
+
+    if (signupMethod === 'email') {
+      if (!form.email.trim()) return 'Please enter your email address'
+      if (!validateEmail(form.email)) return 'Please enter a valid email address'
+    } else {
+      if (!form.phone.trim()) return 'Please enter your phone number'
+      if (!validatePhone(form.phone)) return 'Please enter a valid 11-digit phone number'
+      if (form.recovery_email.trim() && !validateEmail(form.recovery_email)) {
+        return 'Please enter a valid recovery email address, or leave it blank'
+      }
+    }
+
     if (!form.password) return 'Please enter a password'
     const passwordError = validatePassword(form.password)
     if (passwordError) return passwordError
@@ -57,8 +79,13 @@ export default function Register() {
   }
 
   const validateStep2 = () => {
-    if (!form.phone.trim()) return 'Please enter your phone number'
-    if (!validatePhone(form.phone)) return 'Please enter a valid 11-digit phone number'
+    // Phone signups already collected + validated their phone number back
+    // in step 1 (it's their login identifier there, not just contact
+    // info), so this step only needs the address fields.
+    if (signupMethod === 'email') {
+      if (!form.phone.trim()) return 'Please enter your phone number'
+      if (!validatePhone(form.phone)) return 'Please enter a valid 11-digit phone number'
+    }
     if (!form.block_number.trim()) return 'Please enter your block'
     if (!form.house_number.trim()) return 'Please enter your house number'
     return null
@@ -77,39 +104,29 @@ export default function Register() {
     setLoading(true)
     setError(null)
 
-    // Isolated client so this signup's session (if email confirmation is off)
-    // or lack thereof (if confirmation is on) never touches the app's main
-    // client / global auth listener while this screen is still active.
+    // Isolated client so this signup's session (if confirmation is off for
+    // whichever method is in use) or lack thereof (if confirmation is on)
+    // never touches the app's main client / global auth listener while
+    // this screen is still active.
     const tempClient = createIsolatedClient()
 
-    // The public.users profile row is now created server-side by a
-    // Postgres trigger (handle_new_user, fires AFTER INSERT ON auth.users)
-    // that reads these fields out of raw_user_meta_data. This replaces the
-    // old pattern of doing a separate client-side `.from('users').insert()`
-    // call right after signUp().
-    //
-    // That old pattern depended on the client having an active session
-    // immediately after signUp() to satisfy the "insert own profile" RLS
-    // policy — true when email confirmation is OFF, but signUp() returns
-    // no session at all when confirmation is ON, which would silently fail
-    // the insert. Passing the data as signup metadata instead means the
-    // trigger (running as SECURITY DEFINER, in the same transaction as the
-    // auth.users insert) creates the profile regardless of confirmation
-    // status — and if it ever fails, the whole signup atomically rolls
-    // back, so there's no orphaned-auth-account case to roll back manually
-    // here anymore either.
-    const { data, error: signUpError } = await tempClient.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        data: {
-          full_name: form.full_name,
-          phone: form.phone,
-          block_number: form.block_number.toUpperCase(),
-          house_number: form.house_number,
-        },
-      },
-    })
+    // The public.users profile row is created server-side by a Postgres
+    // trigger (handle_new_user, fires AFTER INSERT ON auth.users) that
+    // reads these fields out of raw_user_meta_data — same trigger,
+    // regardless of which identifier is used below.
+    const metadata = {
+      full_name: form.full_name,
+      phone: form.phone,
+      block_number: form.block_number.toUpperCase(),
+      house_number: form.house_number,
+      signup_method: signupMethod,
+    }
+
+    const { data, error: signUpError } = await tempClient.auth.signUp(
+      signupMethod === 'email'
+        ? { email: form.email, password: form.password, options: { data: metadata } }
+        : { phone: toE164Nigerian(form.phone), password: form.password, options: { data: metadata } }
+    )
 
     if (signUpError) {
       setError(signUpError.message)
@@ -118,23 +135,45 @@ export default function Register() {
     }
 
     // Supabase deliberately does NOT return an error when signUp() is
-    // called with an email that already has an unconfirmed account — it
-    // silently returns that existing user instead, to avoid letting
-    // someone probe which emails are already registered. The documented
-    // way to detect this is an empty identities array on the returned
-    // user. Without this check, someone re-submitting this form with an
-    // email they (or someone else) already started signing up with would
-    // see the normal "Check Your Email" success screen even though no new
-    // account or confirmation email was actually created.
+    // called with an email/phone that already has an unconfirmed account —
+    // it silently returns that existing user instead, to avoid letting
+    // someone probe which emails/numbers are already registered. The
+    // documented way to detect this is an empty identities array on the
+    // returned user.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
-      setError('An account with this email already exists. Check your inbox for a confirmation link, or use a different email address.')
+      setError(
+        signupMethod === 'email'
+          ? 'An account with this email already exists. Check your inbox for a confirmation link, or use a different email address.'
+          : 'An account with this phone number already exists.'
+      )
       setLoading(false)
       return
     }
 
-    // Only meaningful if email confirmation is off (signUp() returns an
-    // active session in that case) — a no-op otherwise, since there's no
-    // session to sign out of yet.
+    // Phone confirmation is disabled for this project (by design — see
+    // handoff notes), so a phone signUp() returns an active session
+    // immediately, same as an email signUp() does when email confirmation
+    // is off. That live session is what lets us attach an optional
+    // recovery email right here — Supabase's own SDK refuses to accept
+    // email and phone together in a single signUp() call (they're
+    // mutually exclusive there), so this has to be a separate follow-up
+    // call on the session signUp() just returned, not part of the same
+    // request.
+    if (signupMethod === 'phone' && form.recovery_email.trim()) {
+      const { error: emailErr } = await tempClient.auth.updateUser({ email: form.recovery_email.trim() })
+      if (emailErr) {
+        // Not fatal — the phone account itself is already created and
+        // pending approval regardless; the recovery email is a bonus, and
+        // surfacing this as a blocking error here would be confusing this
+        // late in a signup that has, from the user's perspective, already
+        // succeeded.
+        console.error('Failed to attach recovery email:', emailErr)
+      }
+    }
+
+    // Only meaningful if confirmation is off for the method used (signUp()
+    // returns an active session in that case) — a no-op otherwise, since
+    // there's no session to sign out of yet.
     await tempClient.auth.signOut()
     setSuccess(true)
     setLoading(false)
@@ -199,6 +238,21 @@ export default function Register() {
       margin: 0,
       fontWeight: '500',
     },
+    methodToggle: {
+      display: 'flex',
+      gap: '0.5rem',
+    },
+    methodPill: {
+      flex: 1,
+      padding: '0.6rem',
+      borderRadius: '6px',
+      fontSize: '0.85rem',
+      fontWeight: '700',
+      cursor: 'pointer',
+      fontFamily: "'DM Sans', sans-serif",
+      textAlign: 'center',
+      transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
+    },
     stepRow: {
       display: 'flex',
       alignItems: 'center',
@@ -239,6 +293,10 @@ export default function Register() {
       fontSize: '0.85rem',
       fontWeight: '600',
       color: theme.textSecondary,
+    },
+    optionalLabel: {
+      fontWeight: '500',
+      color: theme.textMuted,
     },
     fieldWrap: {
       position: 'relative',
@@ -337,6 +395,13 @@ export default function Register() {
     border: focusedField === field ? `1.5px solid ${theme.primary}` : `1.5px solid ${theme.border}`,
   })
 
+  const methodPillStyle = (method) => ({
+    ...styles.methodPill,
+    backgroundColor: signupMethod === method ? theme.primary : 'transparent',
+    color: signupMethod === method ? theme.primaryText : theme.textSecondary,
+    border: `1.5px solid ${signupMethod === method ? theme.primary : theme.border}`,
+  })
+
   if (success) {
     return (
       <div style={{ ...styles.container, alignItems: 'center' }}>
@@ -346,12 +411,28 @@ export default function Register() {
               <polyline points="20 6 9 17 4 12"/>
             </svg>
           </div>
-          <h2 style={styles.successTitle}>Check Your Email</h2>
-          <p style={styles.successText}>
-            We've sent a confirmation link to <strong style={{ color: theme.textPrimary }}>{form.email}</strong>.
-            Click the link to verify your address — after that, your account will be pending admin approval,
-            and you'll be able to sign in once it's approved.
-          </p>
+          {signupMethod === 'email' ? (
+            <>
+              <h2 style={styles.successTitle}>Check Your Email</h2>
+              <p style={styles.successText}>
+                We've sent a confirmation link to <strong style={{ color: theme.textPrimary }}>{form.email}</strong>.
+                Click the link to verify your address — after that, your account will be pending admin approval,
+                and you'll be able to sign in once it's approved.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 style={styles.successTitle}>Request Submitted</h2>
+              <p style={styles.successText}>
+                Your account is pending admin approval. You'll be able to sign in with your phone number and
+                password once it's approved.
+                {form.recovery_email.trim() && (
+                  <> We've also sent a confirmation link to your recovery email — click it so you can use it to
+                  reset your password later if you ever need to.</>
+                )}
+              </p>
+            </>
+          )}
           <button style={styles.submitBtn} onClick={onBackToLogin}>
             OK
           </button>
@@ -374,6 +455,17 @@ export default function Register() {
             {step === 1 ? 'Enter your account details' : 'Almost done — a few more details'}
           </p>
         </div>
+
+        {step === 1 && (
+          <div style={styles.methodToggle}>
+            <button type="button" style={methodPillStyle('email')} onClick={() => switchMethod('email')}>
+              Sign up with Email
+            </button>
+            <button type="button" style={methodPillStyle('phone')} onClick={() => switchMethod('phone')}>
+              Sign up with Phone
+            </button>
+          </div>
+        )}
 
         <div style={styles.stepRow}>
           <div style={{ ...styles.stepDot, backgroundColor: theme.primary }} />
@@ -398,24 +490,60 @@ export default function Register() {
                   onChange={e => update('full_name', e.target.value)}
                   onFocus={() => setFocusedField('full_name')}
                   onBlur={() => setFocusedField(null)}
-                  onKeyDown={e => handleKeyDown(e, emailRef)}
+                  onKeyDown={e => handleKeyDown(e, signupMethod === 'email' ? emailRef : phoneRef)}
                 />
               </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Email address</label>
-                <input
-                  ref={emailRef}
-                  style={inputStyle('email')}
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={e => update('email', e.target.value)}
-                  onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField(null)}
-                  onKeyDown={e => handleKeyDown(e, passwordRef)}
-                />
-              </div>
+              {signupMethod === 'email' ? (
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Email address</label>
+                  <input
+                    ref={emailRef}
+                    style={inputStyle('email')}
+                    type="email"
+                    placeholder="you@example.com"
+                    value={form.email}
+                    onChange={e => update('email', e.target.value)}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                    onKeyDown={e => handleKeyDown(e, passwordRef)}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.label}>Phone number</label>
+                    <input
+                      ref={phoneRef}
+                      style={inputStyle('phone')}
+                      type="tel"
+                      placeholder="e.g. 0801 234 5678"
+                      value={form.phone}
+                      onChange={e => handlePhoneChange(e.target.value)}
+                      onFocus={() => setFocusedField('phone')}
+                      onBlur={() => setFocusedField(null)}
+                      onKeyDown={e => handleKeyDown(e, recoveryEmailRef)}
+                    />
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.label}>
+                      Recovery email <span style={styles.optionalLabel}>(optional)</span>
+                    </label>
+                    <input
+                      ref={recoveryEmailRef}
+                      style={inputStyle('recovery_email')}
+                      type="email"
+                      placeholder="Used only if you forget your password"
+                      value={form.recovery_email}
+                      onChange={e => update('recovery_email', e.target.value)}
+                      onFocus={() => setFocusedField('recovery_email')}
+                      onBlur={() => setFocusedField(null)}
+                      onKeyDown={e => handleKeyDown(e, passwordRef)}
+                    />
+                  </div>
+                </>
+              )}
 
               <div style={styles.fieldGroup}>
                 <label style={styles.label}>Password</label>
@@ -463,20 +591,22 @@ export default function Register() {
 
           {step === 2 && (
             <>
-              <div style={styles.fieldGroup}>
-                <label style={styles.label}>Phone number</label>
-                <input
-                  ref={phoneRef}
-                  style={inputStyle('phone')}
-                  type="tel"
-                  placeholder="e.g. 0801 234 5678"
-                  value={form.phone}
-                  onChange={e => handlePhoneChange(e.target.value)}
-                  onFocus={() => setFocusedField('phone')}
-                  onBlur={() => setFocusedField(null)}
-                  onKeyDown={e => handleKeyDown(e, blockRef)}
-                />
-              </div>
+              {signupMethod === 'email' && (
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Phone number</label>
+                  <input
+                    ref={phoneRef}
+                    style={inputStyle('phone')}
+                    type="tel"
+                    placeholder="e.g. 0801 234 5678"
+                    value={form.phone}
+                    onChange={e => handlePhoneChange(e.target.value)}
+                    onFocus={() => setFocusedField('phone')}
+                    onBlur={() => setFocusedField(null)}
+                    onKeyDown={e => handleKeyDown(e, blockRef)}
+                  />
+                </div>
+              )}
 
               <div style={styles.fieldGroup}>
                 <label style={styles.label}>Street</label>
